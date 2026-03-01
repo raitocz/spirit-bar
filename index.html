@@ -63,15 +63,35 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "BarOrPub",
-    "name": "SPiRiT – Bar • Hookah Lounge • Coffee",
+    "@type": ["BarOrPub", "LocalBusiness"],
+    "@id": "https://spirit-bar.cz/#business",
+    "name": "SPiRiT – Bar, Hookah Lounge & Coffee",
     "alternateName": "SPiRiT Teplice",
     "description": "Moderní bar, hookah lounge a kavárna v Teplicích. Nejlepší vodní dýmky v regionu, koktejly, káva, sypané čaje, poctivé limonády a živé eventy.",
     "url": "https://spirit-bar.cz",
-    "logo": "https://spirit-bar.cz/img/logo_png.png",
-    "image": "https://spirit-bar.cz/img/favicon/og-image-1200x630.jpg",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://spirit-bar.cz/img/logo/logo.jpg",
+      "width": 1920,
+      "height": 1920
+    },
+    "image": [
+      {
+        "@type": "ImageObject",
+        "url": "https://spirit-bar.cz/img/favicon/og-image-1200x630.jpg",
+        "width": 1200,
+        "height": 630
+      }
+    ],
     "telephone": "+420731829346",
     "email": "info@spirit-bar.cz",
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "telephone": "+420731829346",
+      "email": "info@spirit-bar.cz",
+      "contactType": "customer service",
+      "availableLanguage": ["Czech"]
+    },
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "Školní 605/18",
@@ -84,6 +104,16 @@
       "latitude": 50.64284,
       "longitude": 13.82447
     },
+    "hasMap": "https://maps.google.com/?q=50.64284,13.82447",
+    "areaServed": {
+      "@type": "City",
+      "name": "Teplice"
+    },
+    "openingHours": [
+      "Tu-Th 17:00-22:00",
+      "Su 17:00-22:00",
+      "Fr-Sa 17:00-02:00"
+    ],
     "openingHoursSpecification": [
       {
         "@type": "OpeningHoursSpecification",
@@ -99,11 +129,12 @@
       }
     ],
     "servesCuisine": ["Koktejly","Káva","Hookah","Čaj","Limonády"],
+    "acceptsReservations": true,
     "priceRange": "$$",
     "currenciesAccepted": "CZK",
     "paymentAccepted": "Hotovost, Platební karta, Bezkontaktní platba",
     "amenityFeature": [
-      {"@type": "LocationFeatureSpecification", "name": "Wi-Fi",       "value": true},
+      {"@type": "LocationFeatureSpecification", "name": "Wi-Fi",        "value": true},
       {"@type": "LocationFeatureSpecification", "name": "Hookah Lounge","value": true},
       {"@type": "LocationFeatureSpecification", "name": "PlayStation",  "value": true},
       {"@type": "LocationFeatureSpecification", "name": "Deskové hry",  "value": true},
