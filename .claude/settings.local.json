@@ -9,7 +9,9 @@
       "Bash(curl:*)",
       "WebFetch(domain:nominatim.openstreetmap.org)",
       "Bash(identify:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(cwebp:*)",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -54,8 +54,8 @@
   <link rel="dns-prefetch" href="//fonts.gstatic.com" />
   <link rel="dns-prefetch" href="//unpkg.com" />
   <link rel="dns-prefetch" href="//basemaps.cartocdn.com" />
-  <link rel="preload" as="image" href="img/logo_png.png" />
-  <link rel="preload" as="image" href="img/PXL_20250920_175659499.MP.jpg" />
+  <link rel="preload" as="image" href="img/logo/logo_png.png" />
+  <link rel="preload" as="image" href="img/photo/001.webp" />
 
   <!-- ═══ JSON-LD Structured Data ═══ -->
   <script type="application/ld+json">
@@ -249,10 +249,10 @@
     .hero-bg {
       position: absolute;
       inset: -24px; /* overshoot edges so blur doesn't show white fringe */
-      background: url('img/PXL_20250920_175659499.MP.jpg') center/cover no-repeat;
-      filter: blur(10px);
+      background: url('img/photo/009.webp') center/cover no-repeat;
+      filter: blur(4px);
       transform: scale(1.06);
-      opacity: .22;
+      opacity: .6;
       z-index: 0;
     }
     /* Dark gradient overlay on top of the photo */
@@ -449,7 +449,7 @@
     }
     .about-img img {
       width: 100%;
-      aspect-ratio: 4/3;
+      aspect-ratio: 16/9;
       object-fit: cover;
       border-radius: var(--radius);
       /* Cool blue tone, suppress warmth */
@@ -797,35 +797,37 @@
       background-image:
         radial-gradient(ellipse 80% 60% at 50% 100%, rgba(38,53,212,.1) 0%, transparent 70%);
     }
-    .contact-grid {
+    .contact-info {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 4rem;
-      align-items: start;
+      gap: 2rem;
     }
     .contact-info .item {
       display: flex;
-      gap: 1rem;
+      gap: 1.6rem;
       align-items: flex-start;
-      margin-bottom: 1.9rem;
+      padding: 2.4rem 2rem;
+      background: var(--dark3);
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,.05);
     }
     .contact-info .icon {
-      width: 44px; height: 44px;
+      width: 64px; height: 64px;
       border-radius: var(--radius);
       background: rgba(0,160,255,.07);
       border: 1px solid rgba(0,207,255,.18);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.15rem;
+      font-size: 1.7rem;
       flex-shrink: 0;
     }
     .contact-info strong {
       display: block;
-      font-size: .72rem;
-      letter-spacing: .12em;
+      font-size: .8rem;
+      letter-spacing: .13em;
       text-transform: uppercase;
-      margin-bottom: .28rem;
+      margin-bottom: .5rem;
       background: var(--grad);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -834,23 +836,23 @@
     .contact-info a, .contact-info p {
       color: var(--text);
       text-decoration: none;
-      font-size: .92rem;
+      font-size: 1.15rem;
       transition: color .2s;
     }
     .contact-info a:hover { color: var(--cyan); }
 
-    .socials { display: flex; gap: .8rem; flex-wrap: wrap; margin-top: .5rem; }
+    .socials { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .7rem; }
     .social-btn {
       display: inline-flex;
       align-items: center;
-      gap: .5rem;
-      padding: .55rem 1.15rem;
+      gap: .55rem;
+      padding: .7rem 1.5rem;
       border-radius: 100px;
       background: var(--dark4);
       border: 1px solid rgba(0,207,255,.12);
       color: var(--text);
       text-decoration: none;
-      font-size: .8rem;
+      font-size: .95rem;
       font-weight: 500;
       transition: .25s;
     }
@@ -860,47 +862,6 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 16px rgba(0,207,255,.1);
     }
-
-    .contact-form-box {
-      background: var(--dark3);
-      border-radius: var(--radius);
-      padding: 2.2rem;
-      border: 1px solid rgba(255,255,255,.05);
-    }
-    .contact-form-box h3 {
-      font-family: 'Anton', sans-serif;
-      font-size: 1.3rem;
-      font-weight: 400;
-      letter-spacing: .05em;
-      margin-bottom: 1.5rem;
-    }
-    .form-group { margin-bottom: 1.1rem; }
-    .form-group label {
-      display: block;
-      font-size: .75rem;
-      color: var(--muted);
-      letter-spacing: .09em;
-      text-transform: uppercase;
-      margin-bottom: .45rem;
-    }
-    .form-group input,
-    .form-group textarea {
-      width: 100%;
-      background: var(--dark);
-      border: 1px solid rgba(255,255,255,.07);
-      border-radius: 8px;
-      padding: .75rem 1rem;
-      color: var(--text);
-      font-family: inherit;
-      font-size: .9rem;
-      outline: none;
-      transition: border-color .2s;
-      resize: vertical;
-    }
-    .form-group input:focus,
-    .form-group textarea:focus { border-color: rgba(0,207,255,.45); }
-    .form-group textarea { min-height: 110px; }
-    .form-submit { width: 100%; margin-top: .5rem; }
 
     /* ─────── FOOTER ─────── */
     footer {
@@ -923,7 +884,7 @@
     @media (max-width: 900px) {
       .about-grid,
       .hours-wrap,
-      .contact-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+      .contact-info { grid-template-columns: 1fr; gap: 1.5rem; }
       .about-img { order: -1; }
     }
     @media (max-width: 640px) {
@@ -956,7 +917,7 @@
 <!-- NAV -->
 <nav id="navbar">
   <a href="#hero" class="nav-logo">
-    <img src="img/logo_white_png.png" alt="SPiRiT" />
+    <img src="img/logo/logo_white_png.png" alt="SPiRiT" />
   </a>
   <ul class="nav-links" id="navLinks">
     <li><a href="#about"       onclick="closeNav()">O nás</a></li>
@@ -980,7 +941,7 @@
   <div class="glow glow-3"></div>
   <div class="hero-content">
     <h1 class="sr-only">SPiRiT Teplice – Bar, Hookah Lounge a Coffee | Školní 605/18, 415 01 Teplice</h1>
-    <img src="img/logo_png.png" alt="SPiRiT – Bar • Hookah Lounge • Coffee" class="hero-logo" />
+    <img src="img/logo/logo_png.png" alt="SPiRiT – Bar • Hookah Lounge • Coffee" class="hero-logo" />
     <p class="hero-tag">Teplice &nbsp;·&nbsp; Školní 605/18</p>
     <p class="hero-sub">Bar &nbsp;·&nbsp; Hookah Lounge &nbsp;·&nbsp; Coffee</p>
     <div class="hero-buttons">
@@ -1006,7 +967,7 @@
       </div>
       <div class="about-img fade-up">
         <img
-          src="img/PXL_20250920_175659499.MP.jpg"
+          src="img/photo/003.webp"
           alt="SPiRiT bar interiér"
           loading="lazy"
         />
@@ -1082,17 +1043,29 @@
   <div class="carousel-wrap fade-up">
     <div class="carousel-viewport">
       <div class="carousel-track" id="carouselTrack">
-        <div class="carousel-slide"><img src="img/IMG_20250618_174746.jpg"           alt="Hookah lounge – vodní dýmky" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/PXL_20250920_175659499.MP.jpg"      alt="Interiér baru SPiRiT" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/PXL_20250919_221018070.MP.jpg"      alt="Hosté s vodními dýmkami" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250725_200002.jpg"            alt="Craftium × SPiRiT event" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250725_184753.jpg"            alt="Craftium Nova prezentace" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250712_211302.jpg"            alt="Večer v baru" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250712_211737.png"            alt="SPiRiT bar – živá atmosféra" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250712_205854.jpg"            alt="Live event – bubenické vystoupení" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250712_205336.jpg"            alt="Live hudba v baru" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250912_213932.jpg"            alt="Pirátský večer – tematická akce" loading="lazy" /></div>
-        <div class="carousel-slide"><img src="img/IMG_20250913_201458.jpg"            alt="Interiér při tematické akci" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/001.webp" alt="SPiRiT bar – interiér" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/002.webp" alt="SPiRiT bar – hookah lounge" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/003.webp" alt="SPiRiT bar – vodní dýmky" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/004.webp" alt="SPiRiT bar – atmosféra" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/005.webp" alt="SPiRiT bar – hosté" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/006.webp" alt="SPiRiT bar – večer" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/007.webp" alt="SPiRiT bar – bar" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/008.webp" alt="SPiRiT bar – nápoje" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/009.webp" alt="SPiRiT bar – koktejly" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/010.webp" alt="SPiRiT bar – lounge" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/011.webp" alt="SPiRiT bar – hookah" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/012.webp" alt="SPiRiT bar – event" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/013.webp" alt="SPiRiT bar – akce" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/014.webp" alt="SPiRiT bar – živá akce" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/015.webp" alt="SPiRiT bar – tematický večer" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/016.webp" alt="SPiRiT bar – kavárna" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/017.webp" alt="SPiRiT bar – coffee" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/018.webp" alt="SPiRiT bar – interiér 2" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/019.webp" alt="SPiRiT bar – prostor" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/020.webp" alt="SPiRiT bar – pohoda" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/021.webp" alt="SPiRiT bar – noční atmosféra" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/022.webp" alt="SPiRiT bar – hosté a atmosféra" loading="lazy" /></div>
+        <div class="carousel-slide"><img src="img/photo/023.webp" alt="SPiRiT bar – oblíbené místo" loading="lazy" /></div>
       </div>
     </div>
     <button class="carousel-btn carousel-prev" id="prevBtn" aria-label="Předchozí">&#8249;</button>
@@ -1102,17 +1075,29 @@
   <div class="carousel-dots" id="carouselDots"></div>
 
   <div class="carousel-thumbs" id="carouselThumbs">
-    <div class="carousel-thumb"><img src="img/IMG_20250618_174746.jpg"           alt="" /></div>
-    <div class="carousel-thumb"><img src="img/PXL_20250920_175659499.MP.jpg"      alt="" /></div>
-    <div class="carousel-thumb"><img src="img/PXL_20250919_221018070.MP.jpg"      alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250725_200002.jpg"            alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250725_184753.jpg"            alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250712_211302.jpg"            alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250712_211737.png"            alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250712_205854.jpg"            alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250712_205336.jpg"            alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250912_213932.jpg"            alt="" /></div>
-    <div class="carousel-thumb"><img src="img/IMG_20250913_201458.jpg"            alt="" /></div>
+    <div class="carousel-thumb"><img src="img/photo/001.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/002.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/003.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/004.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/005.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/006.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/007.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/008.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/009.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/010.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/011.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/012.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/013.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/014.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/015.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/016.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/017.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/018.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/019.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/020.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/021.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/022.webp" alt="" loading="lazy" /></div>
+    <div class="carousel-thumb"><img src="img/photo/023.webp" alt="" loading="lazy" /></div>
   </div>
 </section>
 
@@ -1212,62 +1197,41 @@
       <h2 class="section-title">Spojte se s námi</h2>
       <div class="section-divider"></div>
     </div>
-    <div class="contact-grid">
-      <div class="contact-info fade-up">
-        <div class="item">
-          <div class="icon">📍</div>
-          <div>
-            <strong>Adresa</strong>
-            <p>Školní 605/18<br>415 01 Teplice</p>
-          </div>
-        </div>
-        <div class="item">
-          <div class="icon">📞</div>
-          <div>
-            <strong>Telefon</strong>
-            <a href="tel:+420731829346">+420 731 829 346</a>
-          </div>
-        </div>
-        <div class="item">
-          <div class="icon">✉️</div>
-          <div>
-            <strong>E-mail</strong>
-            <a href="mailto:info@spirit-bar.cz">info@spirit-bar.cz</a>
-          </div>
-        </div>
-        <div class="item">
-          <div class="icon">🌐</div>
-          <div>
-            <strong>Sociální sítě</strong>
-            <div class="socials">
-              <a href="https://www.instagram.com/spirit_bar_teplice/" target="_blank" rel="noopener" class="social-btn">
-                📸 Instagram
-              </a>
-              <a href="https://www.facebook.com/profile.php?id=61577594755916" target="_blank" rel="noopener" class="social-btn">
-                👍 Facebook
-              </a>
-            </div>
-          </div>
+    <div class="contact-info">
+      <div class="item fade-up">
+        <div class="icon">📍</div>
+        <div>
+          <strong>Adresa</strong>
+          <p>Školní 605/18<br>415 01 Teplice</p>
         </div>
       </div>
-
-      <div class="contact-form-box fade-up">
-        <h3>Napište nám</h3>
-        <form onsubmit="submitForm(event)">
-          <div class="form-group">
-            <label>Jméno</label>
-            <input type="text" placeholder="Vaše jméno" required />
+      <div class="item fade-up">
+        <div class="icon">📞</div>
+        <div>
+          <strong>Telefon</strong>
+          <a href="tel:+420731829346">+420 731 829 346</a>
+        </div>
+      </div>
+      <div class="item fade-up">
+        <div class="icon">✉️</div>
+        <div>
+          <strong>E-mail</strong>
+          <a href="mailto:info@spirit-bar.cz">info@spirit-bar.cz</a>
+        </div>
+      </div>
+      <div class="item fade-up">
+        <div class="icon">🌐</div>
+        <div>
+          <strong>Sociální sítě</strong>
+          <div class="socials">
+            <a href="https://www.instagram.com/spirit_bar_teplice/" target="_blank" rel="noopener" class="social-btn">
+              📸 Instagram
+            </a>
+            <a href="https://www.facebook.com/profile.php?id=61577594755916" target="_blank" rel="noopener" class="social-btn">
+              👍 Facebook
+            </a>
           </div>
-          <div class="form-group">
-            <label>E-mail</label>
-            <input type="email" placeholder="vas@email.cz" required />
-          </div>
-          <div class="form-group">
-            <label>Zpráva</label>
-            <textarea placeholder="Vaše zpráva nebo dotaz..." required></textarea>
-          </div>
-          <button type="submit" class="btn btn-primary form-submit">Odeslat zprávu</button>
-        </form>
+        </div>
       </div>
     </div>
   </div>
@@ -1276,10 +1240,10 @@
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo">
-    <img src="img/logo_white_png.png" alt="SPiRiT" />
+    <img src="img/logo/logo_white_png.png" alt="SPiRiT" />
   </div>
   <p class="footer-sub">Bar &nbsp;·&nbsp; Hookah Lounge &nbsp;·&nbsp; Coffee</p>
-  <p class="footer-copy">© 2025 SPiRiT Teplice &nbsp;·&nbsp; Školní 605/18, 415 01 Teplice</p>
+  <p class="footer-copy">© 2026 SPiRiT Teplice &nbsp;·&nbsp; Školní 605/18, 415 01 Teplice</p>
 </footer>
 
 <script>
@@ -1423,12 +1387,6 @@
       );
   })();
 
-  function submitForm(e) {
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type=submit]');
-    btn.textContent = '✓ Odesláno!';
-    setTimeout(() => { btn.textContent = 'Odeslat zprávu'; e.target.reset(); }, 3000);
-  }
 </script>
 </body>
 </html>
