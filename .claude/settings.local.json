@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:hookah-teplice.metro.bar)",
+      "WebFetch(domain:en.firmy.cz)",
+      "WebFetch(domain:www.instagram.com)",
+      "WebFetch(domain:www.facebook.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:nominatim.openstreetmap.org)",
+      "Bash(identify:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

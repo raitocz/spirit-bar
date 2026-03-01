@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /img/favicon/
+
+Sitemap: https://spirit-bar.cz/sitemap.xml
