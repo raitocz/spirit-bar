@@ -903,6 +903,14 @@ footer {
   background: rgba(0,207,255,.1);
   box-shadow: 0 0 12px rgba(0,207,255,.2);
 }
+.hero-theme-toggle {
+  font-size: .75rem;
+  opacity: .7;
+  transition: .25s;
+  margin-top: .6rem;
+  animation: fadeUp .9s .4s ease both;
+}
+.hero-theme-toggle:hover { opacity: 1; }
 
 /* ─────── LIGHT THEME ─────── */
 body.light {

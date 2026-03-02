@@ -7,17 +7,25 @@ function closeNav()  { document.getElementById('navLinks').classList.remove('ope
   if (saved === 'light') document.body.classList.add('light');
 })();
 
+function updateThemeButtons(isLight) {
+  var nav = document.getElementById('themeToggle');
+  if (nav) nav.textContent = isLight ? '☀️' : '🌙';
+  var hero = document.querySelector('.hero-theme-toggle');
+  if (hero) {
+    hero.querySelector('.hero-theme-icon').textContent = isLight ? '☀️' : '🌙';
+    hero.lastChild.textContent = isLight ? ' Tmavý motiv' : ' Světlý motiv';
+  }
+}
+
 function toggleTheme() {
   var isLight = document.body.classList.toggle('light');
   localStorage.setItem('theme', isLight ? 'light' : 'dark');
-  var btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = isLight ? '☀️' : '🌙';
+  updateThemeButtons(isLight);
 }
 
-/* Set correct icon on load */
+/* Set correct state on load */
 (function () {
-  var btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = document.body.classList.contains('light') ? '☀️' : '🌙';
+  updateThemeButtons(document.body.classList.contains('light'));
 })();
 
 (function () {
