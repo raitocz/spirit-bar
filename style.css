@@ -589,6 +589,91 @@ section { padding: 6rem 1.5rem; }
   .carousel-thumb { width: 60px; height: 42px; }
 }
 
+/* ─────── SHOP ─────── */
+#shop {
+  background: var(--dark);
+  background-image:
+    radial-gradient(ellipse 70% 60% at 80% 30%, rgba(38,53,212,.08) 0%, transparent 70%);
+}
+.shop-intro {
+  max-width: 780px;
+  margin-bottom: 2.5rem;
+}
+.shop-intro p {
+  color: var(--muted);
+  font-size: .95rem;
+  line-height: 1.9;
+}
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.4rem;
+  margin-bottom: 2rem;
+}
+.shop-card {
+  background: var(--dark3);
+  border: 1px solid rgba(255,255,255,.05);
+  border-radius: var(--radius);
+  padding: 2rem 1.6rem;
+  transition: .3s;
+  position: relative;
+  overflow: hidden;
+}
+.shop-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--grad);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .4s;
+}
+.shop-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(0,207,255,.18);
+  box-shadow: 0 20px 50px rgba(0,0,0,.5), 0 0 28px rgba(0,207,255,.07);
+}
+.shop-card:hover::before { transform: scaleX(1); }
+.shop-card-icon { font-size: 2.1rem; margin-bottom: 1rem; }
+.shop-card h3 {
+  font-family: 'Anton', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 400;
+  letter-spacing: .06em;
+  margin-bottom: .6rem;
+}
+.shop-card p { font-size: .85rem; color: var(--muted); line-height: 1.75; }
+.shop-card strong { color: var(--text); font-weight: 600; }
+.shop-note {
+  color: var(--muted);
+  font-size: .88rem;
+  line-height: 1.7;
+  margin-bottom: 2.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid rgba(0,207,255,.3);
+}
+.shop-photos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.2rem;
+}
+.shop-photos img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid rgba(0,207,255,.1);
+  transition: transform .4s, box-shadow .4s;
+}
+.shop-photos img:hover {
+  transform: scale(1.03);
+  box-shadow: 0 12px 36px rgba(0,0,0,.5), 0 0 20px rgba(0,207,255,.1);
+}
+@media (max-width: 640px) {
+  .shop-photos { grid-template-columns: 1fr; }
+}
+
 /* ─────── MAP ─────── */
 #map-section { background: var(--dark); padding-bottom: 0; }
 .map-header  { margin-bottom: 2.5rem; }
