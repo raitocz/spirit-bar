@@ -4,28 +4,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Static one-page website for **SPiRiT – Bar, Hookah Lounge & Coffee** in Teplice, Czech Republic. No build system, no package manager, no framework – everything is a single `index.html` file with inline CSS and JS.
+One-page website + API backend for **SPiRiT – Bar, Hookah Lounge & Coffee** in Teplice, Czech Republic. Runs on **Cloudflare Workers** with **Hono** framework and **D1** (SQLite) database.
+
+## Tech stack
+
+- **Runtime:** Cloudflare Workers
+- **Framework:** Hono (TypeScript)
+- **Database:** Cloudflare D1 (SQLite)
+- **Static assets:** Served by CF Workers Assets from `public/`
+- **Frontend:** Vanilla HTML/CSS/JS (no build step)
 
 ## Development
 
-Open `index.html` directly in a browser, or serve it locally:
-
 ```bash
-python3 -m http.server 8080
-# then open http://localhost:8080
+cm up           # Start local dev server at http://localhost:8787
+cm help         # Show all available commands
 ```
 
-A local server is required for the Leaflet map tiles and Google Fonts to load correctly.
+Key `cm` commands:
+- `cm up` – local dev server (wrangler dev)
+- `cm deploy` – deploy to Cloudflare Workers
+- `cm db:create` – create D1 database (copy ID to `wrangler.toml`)
+- `cm db:migrate` – run migrations locally
+- `cm db:migrate:prod` – run migrations on production
+- `cm db:seed` – create admin user interactively
 
-## Architecture
+## Project structure
 
-All code lives in `index.html`:
+```
+spirit-bar/
+├── public/                  # Static files (CF Workers Assets)
+│   ├── index.html
+│   ├── style.css
+│   ├── script.js
+│   ├── robots.txt
+│   ├── sitemap.xml
+│   ├── img/
+│   └── font/
+├── src/
+│   ├── index.ts             # Hono entry point
+│   ├── lib/
+│   │   └── auth.ts          # PBKDF2 + JWT helpers
+│   └── routes/
+│       ├── api.ts           # API routes (/api/health, /api/quiz/*)
+│       └── dungeon.ts       # Admin panel routes (/dungeon/*)
+├── migrations/
+│   ├── 0001_create_quiz_registrations.sql
+│   └── 0002_create_admins.sql
+├── bin/
+│   └── cm                   # Dev commands (bash)
+├── wrangler.toml
+├── package.json
+├── tsconfig.json
+└── CLAUDE.md
+```
 
-- **CSS** – inline `<style>` block, CSS custom properties in `:root` for the brand palette
-- **JS** – inline `<script>` at the bottom; no dependencies except Leaflet (loaded from unpkg CDN)
-- **Fonts** – Anton loaded from Google Fonts with a local TTF fallback in `font/Anton-Regular.ttf`; BRAVEEightyone TTF is present in `font/` but not used on the site
-- **Map** – Leaflet.js 1.9.4 with CartoDB Dark Matter tiles; CSS filter applied only to `.leaflet-tile-pane` so the custom marker is unaffected
-- **Carousel** – vanilla JS, no library; state managed in a single IIFE
+## Routing
+
+- `GET /` → CF Assets → `public/index.html` (Worker not invoked)
+- `GET /style.css` → CF Assets → static file
+- `POST /api/quiz/register` → Worker → Hono → D1
+- `GET /api/health` → Worker → `{"status":"ok"}`
+- `GET /dungeon` → Worker → Hono → admin SPA
+- `POST /dungeon/api/login` → Worker → Hono → D1
+- `GET /unknown` → Worker catch-all → 404
 
 ## Brand
 
@@ -40,15 +82,15 @@ The brand gradient always runs `#2635d4 → #00cfff`. Do not use gold/amber – 
 
 ## Assets
 
+All static assets live in `public/`:
+
 ```
-img/
-  logo_png.png        – colour gradient logo, transparent bg (used in hero)
-  logo_white_png.png  – all-white logo (used in nav & footer)
-  logo.jpg            – circular logo on black bg (source for favicons)
-  favicon/            – all favicon & OG image variants
-  PXL_20250920_175659499.MP.jpg  – hero background photo (blurred layer)
-  *.jpg / *.png       – bar photos used in carousel
-font/
+public/img/
+  logo/               – logos (gradient, white, white on bg)
+  photo/              – bar photos (webp, used in carousel)
+  shop/               – shop section photos
+  favicon/            – favicons, OG image, site.webmanifest
+public/font/
   Anton-Regular.ttf
   BRAVEEightyone-Regular.ttf
 ```
@@ -64,5 +106,35 @@ font/
 
 ## SEO files
 
-- `robots.txt` and `sitemap.xml` are at the project root – update `lastmod` in sitemap after content changes
-- JSON-LD `BarOrPub` schema is inline in `<head>`; keep it in sync if hours or contact details change
+- `robots.txt` and `sitemap.xml` are in `public/` – update `lastmod` in sitemap after content changes
+- JSON-LD `BarOrPub` schema is inline in `public/index.html` `<head>`; keep it in sync if hours or contact details change
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Health check |
+| POST | `/api/quiz/register` | Register for quiz (body: `{name, email, phone?}`) |
+| GET | `/api/quiz/registrations` | List all registrations |
+
+## Admin panel (/dungeon)
+
+Protected admin SPA at `/dungeon`. Auth via PBKDF2 password hashing + JWT in httpOnly cookie.
+
+- `JWT_SECRET` must be set via `wrangler secret put JWT_SECRET` for production
+- Seed user created by migration `0002`: `raito` / `RootPass123*`
+- Use `cm db:seed` to create additional admin users interactively
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/dungeon/api/login` | Authenticate, set session cookie |
+| POST | `/dungeon/api/logout` | Clear session cookie |
+| GET | `/dungeon/api/me` | Verify session (returns username) |
+| GET | `/dungeon` | Serve admin SPA |
+| GET | `/dungeon/*` | Client-side routing (serves SPA) |
+
+Dashboard sections (currently placeholder): Galerie, Kvízy, Nastavení.
+
+## Database
+
+D1 binding name: `DB`. Migrations are in `migrations/`. Run `cm db:migrate` locally before testing API routes.

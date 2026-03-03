@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DB_NAME="spirit-bar-db"
+
+case "${1:-help}" in
+  up)
+    npx wrangler dev
+    ;;
+  deploy)
+    npx wrangler deploy
+    ;;
+  db:create)
+    npx wrangler d1 create "$DB_NAME"
+    echo ""
+    echo ">>> Copy the database_id into wrangler.toml"
+    ;;
+  db:migrate)
+    npx wrangler d1 migrations apply "$DB_NAME" --local
+    ;;
+  db:migrate:prod)
+    npx wrangler d1 migrations apply "$DB_NAME" --remote
+    ;;
+  db:seed)
+    echo "Creating admin user..."
+    read -rp "Username: " ADM_USER
+    read -rsp "Password: " ADM_PASS
+    echo
+    HASH=$(node -e "
+      const crypto = require('crypto');
+      const salt = crypto.randomBytes(16);
+      const saltHex = salt.toString('hex');
+      crypto.pbkdf2(process.argv[1], salt, 100000, 32, 'sha256', (err, key) => {
+        console.log('pbkdf2:100000:' + saltHex + ':' + key.toString('hex'));
+      });
+    " "$ADM_PASS")
+    npx wrangler d1 execute "$DB_NAME" --local \
+      --command "INSERT INTO admins (username, password_hash) VALUES ('$ADM_USER', '$HASH')"
+    echo "Admin user '$ADM_USER' created."
+    ;;
+  db:console)
+    npx wrangler d1 execute "$DB_NAME" --local --command "SELECT 1"
+    echo "Use: npx wrangler d1 execute $DB_NAME --local --command 'YOUR SQL'"
+    ;;
+  help|*)
+    echo "Usage: ./cm <command>"
+    echo ""
+    echo "  up               Start local dev server (wrangler dev)"
+    echo "  deploy           Deploy to Cloudflare Workers"
+    echo "  db:create        Create D1 database"
+    echo "  db:migrate       Run migrations locally"
+    echo "  db:migrate:prod  Run migrations on production"
+    echo "  db:seed          Create admin user interactively"
+    echo "  db:console       Open local D1 console"
+    echo "  help             Show this help"
+    ;;
+esac

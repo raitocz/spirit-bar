@@ -11,7 +11,14 @@
       "Bash(identify:*)",
       "Bash(python3:*)",
       "Bash(cwebp:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(test:*)",
+      "Bash(npm install:*)",
+      "Bash(chmod +x:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(./bin/cm db:migrate:*)"
     ]
   }
 }
