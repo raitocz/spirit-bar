@@ -616,11 +616,22 @@ section { padding: 6rem 1.5rem; transition: background .4s ease; }
 }
 @keyframes galerie-spin { to { transform: rotate(360deg); } }
 
+.galerie-year {
+  font-family: 'Anton', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 400;
+  letter-spacing: .04em;
+  color: var(--cyan);
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+}
+.galerie-year:first-of-type {
+  margin-top: 1.5rem;
+}
 .galerie-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.5rem;
-  margin-top: 2rem;
 }
 .galerie-card {
   position: relative;
@@ -749,6 +760,7 @@ body.light .galerie-card:hover {
   border-color: rgba(38,53,212,.25);
   box-shadow: 0 12px 36px rgba(0,0,0,.1), 0 0 20px rgba(38,53,212,.06);
 }
+body.light .galerie-year { color: var(--blue); }
 body.light .galerie-back { color: var(--blue); }
 body.light .galerie-photo {
   border-color: rgba(38,53,212,.1);
@@ -759,6 +771,488 @@ body.light .galerie-photo {
 .galerie-cta {
   text-align: center;
   margin-top: 2rem;
+}
+
+/* ─────── KVÍZ PAGE ─────── */
+.kviz-page {
+  min-height: 60vh;
+  padding-bottom: 4rem;
+  background: var(--dark);
+  transition: background .4s ease;
+}
+.kviz-subheading {
+  font-family: 'Anton', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 400;
+  letter-spacing: .04em;
+  color: var(--cyan);
+  margin-bottom: 1rem;
+}
+.kviz-subheading--past {
+  margin-top: 3rem;
+  color: var(--muted);
+}
+.kviz-card + .kviz-card {
+  margin-top: 1rem;
+}
+.kviz-card {
+  border-radius: var(--radius);
+  border: 1px solid rgba(0,207,255,.12);
+  background: var(--dark3);
+  padding: 1.4rem 1.6rem;
+  transition: transform .3s, box-shadow .3s, border-color .3s;
+}
+.kviz-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0,207,255,.25);
+  box-shadow: 0 12px 32px rgba(0,0,0,.4), 0 0 16px rgba(0,207,255,.06);
+}
+.kviz-card--past {
+  opacity: .75;
+}
+.kviz-card--past:hover {
+  opacity: .9;
+}
+.kviz-card-number {
+  font-family: 'Anton', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: .04em;
+  margin-bottom: .3rem;
+}
+.kviz-card-date {
+  font-size: .82rem;
+  color: var(--muted);
+  margin-bottom: .6rem;
+}
+.kviz-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .85rem;
+  color: var(--muted);
+}
+.kviz-card-price {
+  font-weight: 600;
+  color: var(--cyan);
+}
+/* Light theme */
+body.light .kviz-card {
+  background: #fff;
+  border-color: rgba(38,53,212,.1);
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+}
+body.light .kviz-card:hover {
+  border-color: rgba(38,53,212,.25);
+  box-shadow: 0 12px 36px rgba(0,0,0,.1), 0 0 20px rgba(38,53,212,.06);
+}
+body.light .kviz-card-price {
+  color: var(--blue);
+}
+body.light .kviz-subheading {
+  color: var(--blue);
+}
+
+/* ─────── KVÍZ REGISTRATION ─────── */
+.kviz-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: .8rem;
+  border-top: 1px solid rgba(0,207,255,.08);
+}
+.kviz-spots {
+  font-size: .82rem;
+  color: var(--cyan);
+  font-weight: 500;
+}
+.kviz-spots--full {
+  color: #d05560;
+}
+.kviz-spots--low {
+  color: #e0a030;
+}
+.kviz-register-btn {
+  background: var(--grad);
+  color: #fff;
+  padding: .55rem 1.4rem;
+  border-radius: 100px;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: .25s;
+}
+.kviz-register-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0,207,255,.3);
+  filter: brightness(1.1);
+}
+.kviz-register-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* Form */
+.kviz-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0,207,255,.08);
+}
+.kviz-form .form-group {
+  margin-bottom: .9rem;
+}
+.kviz-form label {
+  display: block;
+  font-size: .78rem;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: .35rem;
+}
+.kviz-input {
+  width: 100%;
+  padding: .6rem .9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(0,207,255,.15);
+  background: var(--dark4);
+  color: var(--text);
+  font-size: .9rem;
+  font-family: inherit;
+  transition: border-color .2s, box-shadow .2s;
+  outline: none;
+}
+.kviz-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(0,207,255,.1);
+}
+
+/* Emoji row */
+.kviz-emoji-row {
+  display: flex;
+  gap: .4rem;
+  margin-top: .4rem;
+  flex-wrap: wrap;
+}
+.kviz-emoji-btn {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,207,255,.12);
+  background: var(--dark4);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.kviz-emoji-btn:hover {
+  border-color: var(--cyan);
+  background: rgba(0,207,255,.1);
+  transform: scale(1.1);
+}
+.kviz-emoji-btn--selected {
+  border-color: var(--cyan);
+  background: rgba(0,207,255,.15);
+  box-shadow: 0 0 8px rgba(0,207,255,.3);
+}
+.kviz-emoji-btn--taken,
+.kviz-emoji-btn--taken:hover {
+  opacity: .25;
+  cursor: not-allowed;
+  transform: none;
+  border-color: rgba(255,255,255,.05);
+  background: transparent;
+}
+
+/* Members */
+.kviz-members {
+  margin-bottom: .5rem;
+}
+.kviz-member-row {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: .5rem;
+  align-items: center;
+}
+.kviz-member-row .kviz-input {
+  flex: 1;
+}
+.kviz-remove-member {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,80,80,.3);
+  background: rgba(255,80,80,.08);
+  color: #d05560;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+.kviz-remove-member:hover {
+  background: rgba(255,80,80,.18);
+  border-color: #d05560;
+}
+.kviz-add-member {
+  background: none;
+  border: 1px dashed rgba(0,207,255,.25);
+  color: var(--cyan);
+  padding: .45rem 1rem;
+  border-radius: 8px;
+  font-size: .82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: .2s;
+  font-family: inherit;
+  margin-bottom: .9rem;
+  display: block;
+}
+.kviz-add-member:hover {
+  border-color: var(--cyan);
+  background: rgba(0,207,255,.06);
+}
+
+/* Form actions */
+.kviz-form-actions {
+  margin-top: .5rem;
+}
+.kviz-submit-btn {
+  width: 100%;
+  padding: .7rem;
+  font-size: .88rem;
+}
+
+/* Error */
+.kviz-form-error {
+  margin-top: .7rem;
+  padding: .6rem .9rem;
+  border-radius: 8px;
+  background: rgba(208,85,96,.1);
+  border: 1px solid rgba(208,85,96,.25);
+  color: #d05560;
+  font-size: .84rem;
+}
+
+/* Success */
+.kviz-success {
+  text-align: center;
+  padding: 1.5rem 1rem;
+}
+.kviz-success-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: rgba(0,207,255,.12);
+  color: var(--cyan);
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: .7rem;
+}
+.kviz-success strong {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: .3rem;
+}
+.kviz-success p {
+  color: var(--muted);
+  font-size: .88rem;
+}
+.kviz-success .kviz-success-notice {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #e0a030;
+  margin-bottom: .4rem;
+}
+.kviz-success-subtitle {
+  max-width: 340px;
+  margin: 0 auto .8rem;
+  line-height: 1.6;
+}
+.kviz-qr {
+  margin: 1rem auto;
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kviz-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.kviz-warning {
+  display: inline-block;
+  margin-top: .6rem;
+  padding: .55rem 1.1rem;
+  border-radius: 8px;
+  background: rgba(255,165,0,.1);
+  border: 1px solid rgba(255,165,0,.25);
+  color: #e0a030;
+  font-size: .84rem;
+  font-weight: 500;
+}
+
+/* ── Kviz Results (public) ── */
+
+.kviz-results-btn {
+  background: transparent;
+  border: 1px solid rgba(255,215,0,.3);
+  color: #FFD700;
+  padding: .55rem 1.2rem;
+  border-radius: 100px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: .25s;
+}
+.kviz-results-btn:hover {
+  background: rgba(255,215,0,.1);
+  border-color: #FFD700;
+}
+
+.kviz-results {
+  padding: .5rem 0 0;
+}
+
+.kviz-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+.kviz-result-row {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .7rem 1rem;
+  border-radius: 8px;
+  background: rgba(255,255,255,.03);
+  border-left: 3px solid transparent;
+}
+
+.kviz-result--gold {
+  background: rgba(255,215,0,.12);
+  border-left-color: #FFD700;
+}
+.kviz-result--silver {
+  background: rgba(192,192,192,.08);
+  border-left-color: #C0C0C0;
+}
+.kviz-result--bronze {
+  background: rgba(205,127,50,.08);
+  border-left-color: #CD7F32;
+}
+
+.kviz-result-place {
+  font-weight: 700;
+  font-size: .95rem;
+  min-width: 1.5rem;
+  text-align: center;
+}
+.kviz-result-medal {
+  font-size: 1.2rem;
+  min-width: 1.3rem;
+  text-align: center;
+}
+.kviz-result-icon {
+  font-size: 1.3rem;
+}
+.kviz-result-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: .9rem;
+}
+.kviz-result-score {
+  font-size: .82rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+body.light .kviz-results-btn {
+  border-color: rgba(38,53,212,.3);
+  color: var(--blue);
+}
+body.light .kviz-results-btn:hover {
+  background: rgba(38,53,212,.07);
+  border-color: var(--blue);
+}
+body.light .kviz-result-row {
+  background: rgba(38,53,212,.03);
+}
+body.light .kviz-result--gold {
+  background: rgba(255,215,0,.1);
+}
+body.light .kviz-result--silver {
+  background: rgba(192,192,192,.08);
+}
+body.light .kviz-result--bronze {
+  background: rgba(205,127,50,.08);
+}
+
+/* Light theme – kviz registration */
+body.light .kviz-card-footer { border-top-color: rgba(38,53,212,.08); }
+body.light .kviz-spots { color: var(--blue); }
+body.light .kviz-spots--full { color: #d05560; }
+body.light .kviz-spots--low { color: #c88d00; }
+body.light .kviz-form { border-top-color: rgba(38,53,212,.08); }
+body.light .kviz-input {
+  background: #fff;
+  border-color: rgba(38,53,212,.15);
+  color: var(--text);
+}
+body.light .kviz-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(38,53,212,.1);
+}
+body.light .kviz-emoji-btn {
+  background: #fff;
+  border-color: rgba(38,53,212,.12);
+}
+body.light .kviz-emoji-btn:hover {
+  border-color: var(--blue);
+  background: rgba(38,53,212,.07);
+}
+body.light .kviz-emoji-btn--selected {
+  border-color: var(--blue);
+  background: rgba(38,53,212,.12);
+  box-shadow: 0 0 8px rgba(38,53,212,.2);
+}
+body.light .kviz-emoji-btn--taken,
+body.light .kviz-emoji-btn--taken:hover {
+  opacity: .2;
+  background: transparent;
+  border-color: rgba(0,0,0,.05);
+}
+body.light .kviz-add-member {
+  border-color: rgba(38,53,212,.25);
+  color: var(--blue);
+}
+body.light .kviz-add-member:hover {
+  border-color: var(--blue);
+  background: rgba(38,53,212,.05);
+}
+body.light .kviz-remove-member {
+  background: rgba(208,85,96,.06);
+}
+body.light .kviz-success-icon {
+  background: rgba(38,53,212,.1);
+  color: var(--blue);
 }
 
 /* ─────── SHOP ─────── */
@@ -1019,6 +1513,42 @@ footer {
 }
 .footer-copy { font-size: .72rem; color: #1e2a3a; }
 
+/* ─────── ERROR PAGE ─────── */
+.error-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: calc(100vh - 200px);
+  padding: 7rem 1.5rem 4rem;
+}
+.error-code {
+  font-family: 'Anton', sans-serif;
+  font-size: clamp(6rem, 18vw, 12rem);
+  font-weight: 400;
+  line-height: 1;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.error-icon { margin: 1rem 0; }
+.error-icon svg { display: block; }
+.error-title {
+  font-family: 'Anton', sans-serif;
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+  font-weight: 400;
+  letter-spacing: .04em;
+  margin-bottom: .6rem;
+}
+.error-sub {
+  color: var(--muted);
+  font-size: .95rem;
+  max-width: 420px;
+  line-height: 1.7;
+}
+
 /* ─────── RESPONSIVE ─────── */
 @media (max-width: 900px) {
   .about-grid,
@@ -1026,7 +1556,7 @@ footer {
   .contact-info { grid-template-columns: 1fr; gap: 1.5rem; }
   .about-img { order: -1; }
 }
-@media (max-width: 640px) {
+@media (max-width: 1400px) {
   .nav-links {
     display: none;
     position: fixed;
@@ -1039,6 +1569,8 @@ footer {
   }
   .nav-links.open { display: flex; }
   .hamburger { display: flex; }
+}
+@media (max-width: 640px) {
   .hero-buttons { flex-direction: column; align-items: center; }
 }
 
@@ -1070,11 +1602,33 @@ footer {
   background: rgba(0,207,255,.1);
   box-shadow: 0 0 12px rgba(0,207,255,.2);
 }
+.btn-quiz-hero {
+  background: #fff;
+  color: var(--dark);
+  font-size: .9rem;
+  padding: 1rem 2.8rem;
+  margin-top: 1rem;
+  box-shadow: 0 0 18px rgba(0,207,255,.35), 0 0 40px rgba(0,207,255,.15);
+  animation: fadeUp .9s .35s ease both;
+}
+.btn-quiz-hero:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 24px rgba(0,207,255,.5), 0 0 56px rgba(0,207,255,.2);
+}
+body.light .btn-quiz-hero {
+  background: #fff;
+  color: var(--blue);
+  box-shadow: 0 0 18px rgba(38,53,212,.25), 0 0 40px rgba(38,53,212,.1);
+}
+body.light .btn-quiz-hero:hover {
+  box-shadow: 0 0 24px rgba(38,53,212,.4), 0 0 56px rgba(38,53,212,.15);
+}
+
 .hero-theme-toggle {
   font-size: .75rem;
   opacity: .7;
   transition: .25s;
-  margin-top: .6rem;
+  margin-top: 1rem;
   animation: fadeUp .9s .4s ease both;
 }
 .hero-theme-toggle:hover { opacity: 1; }
@@ -1259,7 +1813,7 @@ body.light .theme-toggle:hover {
 }
 
 /* Mobile nav */
-@media (max-width: 640px) {
+@media (max-width: 1400px) {
   body.light .nav-links {
     background: rgba(240,244,250,.97);
     border-bottom-color: rgba(38,53,212,.1);

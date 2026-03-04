@@ -411,22 +411,119 @@ body {
   box-shadow: 0 0 0 3px rgba(0,207,255,.1);
 }
 
-.gallery-form input[type="date"] {
-  width: 100%;
-  padding: .75rem 1rem;
-  background: var(--dark3);
-  border: 1px solid rgba(0,207,255,.15);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: .9rem;
-  font-family: inherit;
-  outline: none;
-  transition: border-color .2s;
+/* ── Date Picker ── */
+
+.datepicker-wrap {
+  position: relative;
 }
 
-.gallery-form input[type="date"]:focus {
+.datepicker-input {
+  cursor: pointer !important;
+  caret-color: transparent;
+}
+
+.datepicker-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  background: var(--dark2);
+  border: 1px solid rgba(0,207,255,.2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5), 0 0 20px rgba(0,207,255,.08);
+  z-index: 200;
+  padding: .75rem;
+  user-select: none;
+}
+
+.datepicker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .6rem;
+}
+
+.datepicker-header span {
+  font-size: .85rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.datepicker-prev,
+.datepicker-next {
+  background: none;
+  border: 1px solid rgba(0,207,255,.15);
+  color: var(--text);
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: .2s;
+}
+
+.datepicker-prev:hover,
+.datepicker-next:hover {
   border-color: var(--cyan);
-  box-shadow: 0 0 0 3px rgba(0,207,255,.1);
+  color: var(--cyan);
+  background: rgba(0,207,255,.06);
+}
+
+.datepicker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+
+.datepicker-weekday {
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: .3rem 0;
+}
+
+.datepicker-day {
+  font-size: .8rem;
+  padding: .4rem 0;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  transition: .15s;
+}
+
+.datepicker-day:hover {
+  background: rgba(0,207,255,.1);
+  border-color: rgba(0,207,255,.2);
+}
+
+.datepicker-day--other {
+  color: var(--muted);
+  opacity: .4;
+}
+
+.datepicker-day--today {
+  border-color: var(--cyan);
+}
+
+.datepicker-day--selected {
+  background: var(--grad);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.datepicker-day--selected:hover {
+  filter: brightness(1.15);
+  background: var(--grad);
 }
 
 .form-row {
@@ -445,6 +542,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: .75rem;
+}
+
+.year-header {
+  font-family: 'Anton', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 400;
+  letter-spacing: .04em;
+  color: var(--cyan);
+  margin-top: 1rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid rgba(0,207,255,.1);
+}
+.year-header:first-child {
+  margin-top: 0;
 }
 
 .gallery-card {
@@ -612,6 +723,325 @@ body {
   cursor: grabbing;
 }
 
+/* ── Quiz Detail ── */
+
+.quiz-detail-meta {
+  font-size: .82rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.btn-refresh {
+  margin-left: .75rem;
+  flex-shrink: 0;
+}
+
+.quiz-teams-list {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.team-card {
+  background: var(--dark2);
+  border: 1px solid rgba(0,207,255,.08);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.5rem;
+  transition: border-color .2s;
+}
+
+.team-card:hover {
+  border-color: rgba(0,207,255,.2);
+}
+
+.team-card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: .8rem;
+}
+
+.team-icon {
+  font-size: 1.8rem;
+  width: 2.4rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.team-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-card-name {
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.team-card-email {
+  font-size: .78rem;
+  color: var(--muted);
+}
+
+.team-card-registered {
+  font-size: .72rem;
+  color: var(--muted);
+  opacity: .7;
+  margin-top: .1rem;
+}
+
+.team-status {
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: .3rem .8rem;
+  border-radius: 100px;
+  flex-shrink: 0;
+}
+
+.team-status--paid {
+  background: rgba(0,207,255,.12);
+  color: var(--cyan);
+}
+
+.team-status--unpaid {
+  background: rgba(208,85,96,.12);
+  color: #d05560;
+}
+
+.team-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-bottom: 1rem;
+}
+
+.team-member {
+  display: inline-block;
+  background: var(--dark3);
+  border: 1px solid rgba(0,207,255,.1);
+  border-radius: 6px;
+  padding: .25rem .7rem;
+  font-size: .8rem;
+  color: var(--text);
+}
+
+.team-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-top: .8rem;
+  border-top: 1px solid rgba(0,207,255,.06);
+}
+
+.team-payment-btns {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+
+.team-payment-label {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-right: .2rem;
+}
+
+.btn-payment {
+  background: var(--dark3);
+  color: var(--muted);
+  border: 1px solid rgba(0,207,255,.1);
+}
+
+.btn-payment:hover {
+  background: rgba(0,207,255,.1);
+  color: var(--cyan);
+  border-color: rgba(0,207,255,.25);
+}
+
+.btn-payment--active {
+  background: rgba(0,207,255,.15);
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.btn-cancel-payment {
+  background: rgba(255,165,0,.1);
+  color: #e0a030;
+}
+
+.btn-cancel-payment:hover {
+  background: rgba(255,165,0,.2);
+}
+
+.team-danger-btns {
+  display: flex;
+  gap: .4rem;
+}
+
+.quiz-card-teams {
+  font-size: .78rem;
+  color: var(--cyan);
+  margin-top: .2rem;
+}
+
+.teams-section-header {
+  font-size: .82rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: .5rem 0 .3rem;
+  margin-top: .5rem;
+  border-bottom: 1px solid rgba(0,207,255,.1);
+}
+
+.teams-section-header:first-child {
+  margin-top: 0;
+}
+
+.teams-section--confirmed {
+  color: var(--cyan);
+}
+
+.teams-section--unconfirmed {
+  color: #d05560;
+}
+
+/* ── Quiz Results ── */
+
+.results-row {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.2rem;
+  margin-bottom: .5rem;
+  background: var(--dark2);
+  border: 1px solid rgba(0,207,255,.08);
+  border-radius: var(--radius);
+  border-left: 4px solid transparent;
+  cursor: grab;
+  transition: .2s;
+  user-select: none;
+}
+
+.results-row:active {
+  cursor: grabbing;
+}
+
+.results-row--gold {
+  background: rgba(255,215,0,.15);
+  border-left-color: #FFD700;
+}
+
+.results-row--silver {
+  background: rgba(192,192,192,.10);
+  border-left-color: #C0C0C0;
+}
+
+.results-row--bronze {
+  background: rgba(205,127,50,.10);
+  border-left-color: #CD7F32;
+}
+
+.results-row.dragging {
+  opacity: .35;
+  transform: scale(.97);
+}
+
+.results-row.drag-over {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+  box-shadow: 0 0 16px rgba(0,207,255,.25);
+}
+
+.results-placement {
+  font-weight: 700;
+  font-size: 1rem;
+  min-width: 2rem;
+  text-align: center;
+  color: var(--text);
+}
+
+.results-medal {
+  font-size: 1.3rem;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.results-team-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: .9rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-score-input {
+  width: 80px;
+  padding: .4rem .6rem;
+  background: var(--dark3);
+  border: 1px solid rgba(0,207,255,.15);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: .85rem;
+  font-family: inherit;
+  outline: none;
+  text-align: center;
+  transition: border-color .2s;
+  flex-shrink: 0;
+}
+
+.results-score-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(0,207,255,.1);
+}
+
+.results-score-input::placeholder {
+  color: var(--muted);
+  opacity: .6;
+}
+
+/* ── Mail Catcher ── */
+
+.mail-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: .75rem;
+  margin-bottom: 1.2rem;
+}
+
+.mail-card {
+  background: var(--dark2);
+  border: 1px solid rgba(0,207,255,.08);
+  border-radius: var(--radius);
+  transition: border-color .2s;
+}
+
+.mail-card:hover {
+  border-color: rgba(0,207,255,.2);
+}
+
+.mail-card-header {
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+}
+
+.mail-card-subject {
+  font-weight: 600;
+  font-size: .95rem;
+  margin-bottom: .2rem;
+}
+
+.mail-card-meta {
+  font-size: .78rem;
+  color: var(--muted);
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 768px) {
@@ -671,4 +1101,58 @@ body {
 
   .main-header { padding: 1rem 1.2rem; }
   .main-content { padding: 1.2rem; }
+}
+
+/* ── Confirmation modal ── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal {
+  background: var(--dark2);
+  border: 1px solid rgba(0,207,255,.15);
+  border-radius: var(--radius);
+  padding: 2rem;
+  max-width: 420px;
+  width: 100%;
+}
+
+.modal h3 {
+  font-size: 1.15rem;
+  margin-bottom: .75rem;
+}
+
+.modal p {
+  color: var(--muted);
+  font-size: .9rem;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.modal p strong {
+  color: var(--text);
+}
+
+.modal-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: .6rem;
+}
+
+.btn-confirm-team {
+  background: rgba(0,207,255,.1);
+  color: var(--cyan);
+}
+
+.btn-confirm-team:hover {
+  background: rgba(0,207,255,.2);
 }

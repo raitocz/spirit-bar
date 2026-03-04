@@ -21,11 +21,20 @@ case "${1:-help}" in
   db:migrate:prod)
     npx wrangler d1 migrations apply "$DB_NAME" --remote
     ;;
-  db:seed)
+  create-admin)
     echo "Creating admin user..."
     read -rp "Username: " ADM_USER
+    if [ -z "$ADM_USER" ]; then
+      echo "Error: username cannot be empty" >&2
+      exit 1
+    fi
     read -rsp "Password: " ADM_PASS
     echo
+    if [ -z "$ADM_PASS" ]; then
+      echo "Error: password cannot be empty" >&2
+      exit 1
+    fi
+    ADM_USER_LOWER=$(echo "$ADM_USER" | tr '[:upper:]' '[:lower:]')
     HASH=$(node -e "
       const crypto = require('crypto');
       const salt = crypto.randomBytes(16);
@@ -35,8 +44,11 @@ case "${1:-help}" in
       });
     " "$ADM_PASS")
     npx wrangler d1 execute "$DB_NAME" --local \
-      --command "INSERT INTO admins (username, password_hash) VALUES ('$ADM_USER', '$HASH')"
-    echo "Admin user '$ADM_USER' created."
+      --command "INSERT INTO admins (username, password_hash) VALUES ('$ADM_USER_LOWER', '$HASH')"
+    echo "Admin user '$ADM_USER_LOWER' created."
+    ;;
+  test)
+    npx vitest run
     ;;
   db:console)
     npx wrangler d1 execute "$DB_NAME" --local --command "SELECT 1"
@@ -50,7 +62,8 @@ case "${1:-help}" in
     echo "  db:create        Create D1 database"
     echo "  db:migrate       Run migrations locally"
     echo "  db:migrate:prod  Run migrations on production"
-    echo "  db:seed          Create admin user interactively"
+    echo "  create-admin     Create admin user interactively"
+    echo "  test             Run tests"
     echo "  db:console       Open local D1 console"
     echo "  help             Show this help"
     ;;

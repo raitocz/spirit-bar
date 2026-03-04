@@ -18,7 +18,11 @@
       "Bash(npx tsc:*)",
       "Bash(node:*)",
       "Bash(npx wrangler:*)",
-      "Bash(./bin/cm db:migrate:*)"
+      "Bash(./bin/cm db:migrate:*)",
+      "Bash(bash:*)",
+      "Bash(bin/cm db:migrate:*)",
+      "Bash(cat:*)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

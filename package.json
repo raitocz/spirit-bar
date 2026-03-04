@@ -3,14 +3,18 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4"
+    "hono": "^4",
+    "qrcode-generator": "^1.4.4"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.19",
     "@cloudflare/workers-types": "^4",
     "typescript": "^5",
+    "vitest": "^3.2.4",
     "wrangler": "^4"
   }
 }

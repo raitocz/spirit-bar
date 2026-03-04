@@ -28,6 +28,17 @@ function toggleTheme() {
   updateThemeButtons(document.body.classList.contains('light'));
 })();
 
+/* ── Show quiz hero button only if upcoming quizzes exist ── */
+(function () {
+  var btn = document.getElementById('quizHeroBtn');
+  if (!btn) return;
+  fetch('/api/quizzes').then(function (r) { return r.json(); }).then(function (quizzes) {
+    var today = new Date().toISOString().slice(0, 10);
+    var hasUpcoming = quizzes.some(function (q) { return q.date >= today; });
+    if (hasUpcoming) btn.style.display = '';
+  }).catch(function () {});
+})();
+
 (function () {
   const map = { 1:0, 2:1, 3:2, 4:3, 5:4, 6:5, 0:6 };
   const row = document.getElementById('row-' + map[new Date().getDay()]);

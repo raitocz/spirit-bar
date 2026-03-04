@@ -34,32 +34,47 @@
         return;
       }
 
+      // Group by year (already sorted DESC from API)
+      var byYear = {};
+      galleries.forEach(function (g) {
+        var year = g.date_from ? g.date_from.slice(0, 4) : "—";
+        if (!byYear[year]) byYear[year] = [];
+        byYear[year].push(g);
+      });
+      var years = Object.keys(byYear).sort(function (a, b) { return b.localeCompare(a); });
+
       var html =
         '<div class="container" style="padding-top:8rem;">' +
         '<p class="section-label">Galerie</p>' +
         '<h2 class="section-title">Fotogalerie</h2>' +
-        '<div class="section-divider"></div>' +
-        '<div class="galerie-grid">';
+        '<div class="section-divider"></div>';
 
-      galleries.forEach(function (g) {
-        var cover = g.cover_r2_key
-          ? '<img src="' + photoUrl(g.cover_r2_key) + '" alt="' + escHtml(g.title) + '" loading="lazy" />'
-          : '<div class="galerie-card-placeholder"></div>';
+      years.forEach(function (year) {
+        html += '<h3 class="galerie-year">' + escHtml(year) + '</h3>';
+        html += '<div class="galerie-grid">';
 
-        var dateLabel = formatDate(g.date_from);
-        if (g.date_to) dateLabel += " – " + formatDate(g.date_to);
+        byYear[year].forEach(function (g) {
+          var cover = g.cover_r2_key
+            ? '<img src="' + photoUrl(g.cover_r2_key) + '" alt="' + escHtml(g.title) + '" loading="lazy" />'
+            : '<div class="galerie-card-placeholder"></div>';
 
-        html +=
-          '<a href="/galerie/' + g.id + '" class="galerie-card" data-id="' + g.id + '">' +
-          '<div class="galerie-card-img">' + cover + '</div>' +
-          '<div class="galerie-card-overlay">' +
-          '<h3>' + escHtml(g.title) + "</h3>" +
-          '<span class="galerie-card-date">' + dateLabel + "</span>" +
-          "</div>" +
-          "</a>";
+          var dateLabel = formatDate(g.date_from);
+          if (g.date_to) dateLabel += " – " + formatDate(g.date_to);
+
+          html +=
+            '<a href="/galerie/' + g.id + '" class="galerie-card" data-id="' + g.id + '">' +
+            '<div class="galerie-card-img">' + cover + '</div>' +
+            '<div class="galerie-card-overlay">' +
+            '<h3>' + escHtml(g.title) + "</h3>" +
+            '<span class="galerie-card-date">' + dateLabel + "</span>" +
+            "</div>" +
+            "</a>";
+        });
+
+        html += "</div>";
       });
 
-      html += "</div></div>";
+      html += "</div>";
       app.innerHTML = html;
 
       // SPA click handler

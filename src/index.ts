@@ -3,12 +3,16 @@ import { cors } from "hono/cors";
 import { api } from "./routes/api";
 import { dungeon } from "./routes/dungeon";
 import { galerie } from "./routes/galerie";
+import { kviz } from "./routes/kviz";
+import { errorPage } from "./lib/layout";
 
 type Bindings = {
   DB: D1Database;
   ASSETS: Fetcher;
   PHOTOS: R2Bucket;
   JWT_SECRET: string;
+  RESEND_API_KEY: string;
+  ENVIRONMENT?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -30,8 +34,9 @@ app.use(
 app.route("/api", api);
 app.route("/dungeon", dungeon);
 app.route("/galerie", galerie);
+app.route("/kviz", kviz);
 
 // Catch-all: let CF Assets handle static files; if nothing matched, 404
-app.all("*", (c) => c.text("Not Found", 404));
+app.all("*", (c) => c.html(errorPage(404), 404));
 
 export default app;
