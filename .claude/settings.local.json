@@ -22,7 +22,9 @@
       "Bash(bash:*)",
       "Bash(bin/cm db:migrate:*)",
       "Bash(cat:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(read:*)",
+      "Bash(bin/cm help:*)"
     ]
   }
 }
