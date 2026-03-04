@@ -491,6 +491,12 @@ dungeon.post("/api/teams/:id/confirm", async (c) => {
 
   await sendEmail(c.env, emailMsg);
 
+  await c.env.DB.prepare(
+    "UPDATE quiz_teams SET confirmed_at = ? WHERE id = ?"
+  )
+    .bind(new Date().toISOString(), teamId)
+    .run();
+
   return c.json({ ok: true });
 });
 

@@ -312,6 +312,10 @@
       showError(errDiv, "Vyplňte e-mail.");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError(errDiv, "Zadejte platnou e-mailovou adresu.");
+      return;
+    }
     if (members.length < 1) {
       showError(errDiv, "Vyplňte alespoň jednoho člena.");
       return;
@@ -356,6 +360,7 @@
           '<p class="kviz-success-subtitle">Uhradit můžeš hotově na baru nebo převodem pomocí následujícího QR kódu:</p>' +
           '<div class="kviz-qr">' + qrSvg + '</div>' +
           '<div class="kviz-warning">Zaplať co nejdříve, aby ti někdo místo nevyfoukl!</div>' +
+          '<p style="color:var(--muted);font-size:.85rem;margin-top:1rem;">Na <strong style="color:#fff;">' + esc(email) + '</strong> jsme poslali potvrzující email.</p>' +
         "</div>";
 
       openFormQuizId = null;

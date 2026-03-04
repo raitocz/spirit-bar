@@ -19,4 +19,6 @@ migrations_dir = "migrations"
 binding = "PHOTOS"
 bucket_name = "spirit-bar-photos"
 
-# ENVIRONMENT is set in .dev.vars for local dev only
+[vars]
+ENVIRONMENT = "development"
+# On production, override with: npx wrangler secret put ENVIRONMENT → "production"

@@ -223,7 +223,7 @@ case "${1:-help}" in
     echo -e "  ${B}db:migrate:prod${R}     Run migrations ${D}(production)${R}"
     echo ""
     echo -e "${C}Snapshots${R}"
-    echo -e "  ${B}db:snapshot:prod${R}    Export production DB to snapshots/"
+    echo -e "  ${B}db:snapshot:prod${R}    Export & download production DB to snapshots/"
     echo -e "  ${B}db:snapshots${R}        List all available snapshots"
     echo -e "  ${B}db:snapshot:latest${R}  Restore latest snapshot to local DB"
     echo -e "  ${B}r2:download${R}         Download production photos to local R2"
