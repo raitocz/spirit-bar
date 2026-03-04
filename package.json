@@ -7,8 +7,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "hono": "^4",
-    "qrcode-generator": "^1.4.4"
+    "hono": "^4"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.19",

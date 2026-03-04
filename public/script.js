@@ -1,9 +1,25 @@
+/* ── Dev environment border ── */
+(function () {
+  if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+  var b = document.createElement('div');
+  b.style.cssText = 'position:fixed;inset:0;z-index:99999;pointer-events:none;border:3px solid #34d399;border-radius:4px;';
+  b.addEventListener('click', function () { b.remove(); });
+  document.addEventListener('click', function (e) {
+    var r = 6;
+    if (e.clientX < r || e.clientY < r || e.clientX > innerWidth - r || e.clientY > innerHeight - r) {
+      b.style.pointerEvents = 'auto';
+      b.remove();
+    }
+  });
+  document.body.appendChild(b);
+})();
+
 function toggleNav() { document.getElementById('navLinks').classList.toggle('open'); }
 function closeNav()  { document.getElementById('navLinks').classList.remove('open'); }
 
 /* ── Theme toggle ── */
 (function () {
-  var saved = localStorage.getItem('theme');
+  var saved = localStorage.getItem('spirit-theme');
   if (saved === 'light') document.body.classList.add('light');
 })();
 
@@ -19,7 +35,7 @@ function updateThemeButtons(isLight) {
 
 function toggleTheme() {
   var isLight = document.body.classList.toggle('light');
-  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  localStorage.setItem('spirit-theme', isLight ? 'light' : 'dark');
   updateThemeButtons(isLight);
 }
 

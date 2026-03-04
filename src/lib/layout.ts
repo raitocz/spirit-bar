@@ -161,6 +161,18 @@ window.addEventListener('scroll', function () {
   document.getElementById('navbar').style.padding =
     window.scrollY > 40 ? '.6rem 2.5rem' : '1rem 2.5rem';
 });
+
+// Dev environment border
+(function () {
+  if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+  var b = document.createElement('div');
+  b.style.cssText = 'position:fixed;inset:0;z-index:99999;pointer-events:none;border:3px solid #34d399;border-radius:4px;';
+  document.addEventListener('click', function (e) {
+    var r = 6;
+    if (e.clientX < r || e.clientY < r || e.clientX > innerWidth - r || e.clientY > innerHeight - r) b.remove();
+  });
+  document.body.appendChild(b);
+})();
 </script>
 </body>
 </html>`;

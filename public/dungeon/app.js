@@ -4,7 +4,67 @@
 
   const app = document.getElementById("app");
   let currentUser = null;
-  let currentPage = "galerie";
+  const validPages = ["galerie", "kvizy", "posta", "nastaveni"];
+  let currentPage = validPages.includes(location.hash.replace("#", "")) ? location.hash.replace("#", "") : "galerie";
+
+  // ── Dev environment border ──
+  (function () {
+    if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1") return;
+    const b = document.createElement("div");
+    b.style.cssText = "position:fixed;inset:0;z-index:99999;pointer-events:none;border:3px solid #34d399;border-radius:4px;";
+    document.addEventListener("click", (e) => {
+      const r = 6;
+      if (e.clientX < r || e.clientY < r || e.clientX > innerWidth - r || e.clientY > innerHeight - r) b.remove();
+    });
+    document.body.appendChild(b);
+  })();
+
+  // ── Toast notifications ──
+
+  function showToast(message, type = "success") {
+    const toast = document.createElement("div");
+    toast.className = "toast toast--" + type;
+    const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
+    toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
+    let container = document.getElementById("toast-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "toast-container";
+      document.body.appendChild(container);
+    }
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add("toast--visible"));
+    setTimeout(() => {
+      toast.classList.remove("toast--visible");
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  // ── Confirm dialog ──
+
+  function showConfirm(title, message) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal">
+          <h3>${title}</h3>
+          <p>${message}</p>
+          <div class="modal-btns">
+            <button class="btn-secondary" data-action="cancel">Zrušit</button>
+            <button class="btn-primary" data-action="ok">Potvrdit</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      function close(result) {
+        overlay.remove();
+        resolve(result);
+      }
+      overlay.querySelector('[data-action="cancel"]').addEventListener("click", () => close(false));
+      overlay.querySelector('[data-action="ok"]').addEventListener("click", () => close(true));
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
+    });
+  }
 
   // ── DatePicker ──
 
@@ -328,6 +388,7 @@
           currentPage = page;
           currentQuizId = null;
           resultsMode = false;
+          location.hash = page;
           renderDashboard();
         }
       });
@@ -522,13 +583,13 @@
   }
 
   async function deleteGallery(id) {
-    if (!confirm("Opravdu smazat tuto galerii?")) return;
+    if (!await showConfirm("Smazat galerii", "Opravdu smazat tuto galerii? Všechny fotky budou odstraněny.")) return;
     try {
       await api("DELETE", "/galleries/" + id);
       await loadGalleries();
       renderGalleryList();
     } catch (err) {
-      alert("Chyba: " + err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -675,13 +736,13 @@
   }
 
   async function deletePhoto(photoId) {
-    if (!confirm("Smazat tuto fotku?")) return;
+    if (!await showConfirm("Smazat fotku", "Opravdu smazat tuto fotku?")) return;
     try {
       await api("DELETE", "/galleries/" + currentGalleryId + "/photos/" + photoId);
       galleryPhotos = galleryPhotos.filter((p) => p.id !== photoId);
       renderPhotoGrid();
     } catch (err) {
-      alert("Chyba: " + err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -785,12 +846,12 @@
 
     document.getElementById("mail-refresh-btn").addEventListener("click", loadAndRenderMail);
     document.getElementById("mail-clear-btn").addEventListener("click", async () => {
-      if (!confirm("Smazat všechny emaily?")) return;
+      if (!await showConfirm("Smazat emaily", "Opravdu smazat všechny zachycené emaily?")) return;
       try {
         await api("DELETE", "/mail");
         loadAndRenderMail();
       } catch (err) {
-        alert("Chyba: " + err.message);
+        showToast(err.message, "error");
       }
     });
 
@@ -1056,13 +1117,13 @@
   }
 
   async function deleteQuiz(id) {
-    if (!confirm("Opravdu smazat tento kvíz?")) return;
+    if (!await showConfirm("Smazat kvíz", "Opravdu smazat tento kvíz? Všechny registrované týmy budou odstraněny.")) return;
     try {
       await api("DELETE", "/quizzes/" + id);
       await loadQuizzes();
       renderQuizList();
     } catch (err) {
-      alert("Chyba: " + err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -1143,44 +1204,60 @@
     return dd + ". " + mm + ". " + yy + " " + hh + ":" + mi;
   }
 
-  function renderTeamCard(team) {
+  let expandedTeamId = null;
+
+  function renderTeamRow(team) {
     const paid = team.payment_status !== null && team.payment_status !== undefined;
     const statusLabel = paid ? paymentLabels[team.payment_status] || team.payment_status : "Nezaplaceno";
     const statusClass = paid ? "team-status--paid" : "team-status--unpaid";
+    const isOpen = expandedTeamId === team.id;
+    const memberCount = (team.members || []).length;
 
-    const members = (team.members || []).map((m) =>
-      `<span class="team-member">${esc(m.name)}</span>`
-    ).join("");
-
-    const registered = team.created_at ? formatDateTime(team.created_at) : "";
-
-    return `
-      <div class="team-card" data-team-id="${team.id}">
-        <div class="team-card-header">
+    let html = `
+      <div class="team-row ${isOpen ? "team-row--open" : ""}" data-team-id="${team.id}">
+        <div class="team-row-summary" data-team-id="${team.id}">
           <span class="team-icon">${esc(team.icon)}</span>
-          <div class="team-card-info">
-            <div class="team-card-name">${esc(team.team_name)}</div>
+          <span class="team-row-name">${esc(team.team_name)}</span>
+          <span class="team-row-meta">(${esc(team.email)})</span>
+          <span class="team-row-members-inline">(${(team.members || []).map((m) => esc(m.name)).join(", ")})</span>
+          <span class="team-row-count">${memberCount} čl.</span>
+          <span class="team-status ${statusClass}">${statusLabel}</span>
+          <span class="team-row-chevron">${isOpen ? "▾" : "›"}</span>
+        </div>`;
+
+    if (isOpen) {
+      const members = (team.members || []).map((m) =>
+        `<span class="team-member">${esc(m.name)}</span>`
+      ).join("");
+
+      const registered = team.created_at ? formatDateTime(team.created_at) : "";
+
+      html += `
+        <div class="team-detail">
+          <div class="team-detail-info">
             <div class="team-card-email">${esc(team.email)}</div>
             ${registered ? `<div class="team-card-registered">Registrace: ${registered}</div>` : ""}
           </div>
-          <span class="team-status ${statusClass}">${statusLabel}</span>
-        </div>
-        <div class="team-members">${members}</div>
-        <div class="team-card-actions">
-          <div class="team-payment-btns">
-            <span class="team-payment-label">Platba:</span>
-            <button class="btn-small btn-payment ${team.payment_status === "cash" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="cash">💵 Hotově</button>
-            <button class="btn-small btn-payment ${team.payment_status === "card" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="card">💳 Kartou</button>
-            <button class="btn-small btn-payment ${team.payment_status === "free" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="free">🎁 Zdarma</button>
-            <button class="btn-small btn-payment ${team.payment_status === "bank" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="bank">🏦 Převodem</button>
+          <div class="team-members">${members}</div>
+          <div class="team-card-actions">
+            <div class="team-payment-btns">
+              <span class="team-payment-label">Platba:</span>
+              <button class="btn-small btn-payment ${team.payment_status === "cash" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="cash">💵 Hotově</button>
+              <button class="btn-small btn-payment ${team.payment_status === "card" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="card">💳 Kartou</button>
+              <button class="btn-small btn-payment ${team.payment_status === "free" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="free">🎁 Zdarma</button>
+              <button class="btn-small btn-payment ${team.payment_status === "bank" ? "btn-payment--active" : ""}" data-team-id="${team.id}" data-status="bank">🏦 Převodem</button>
+            </div>
+            <div class="team-danger-btns">
+              ${paid ? `<button class="btn-small btn-confirm-team" data-team-id="${team.id}">${team.confirmed_at ? "✉️ Potvrdit znovu" : "✉️ Potvrdit"}</button>` : ""}
+              ${paid ? `<button class="btn-small btn-cancel-payment" data-team-id="${team.id}">↩ Zrušit platbu</button>` : ""}
+              <button class="btn-small btn-delete btn-delete-team" data-team-id="${team.id}">🗑 Smazat</button>
+            </div>
           </div>
-          <div class="team-danger-btns">
-            ${paid ? `<button class="btn-small btn-confirm-team" data-team-id="${team.id}">✉️ Potvrdit</button>` : ""}
-            ${paid ? `<button class="btn-small btn-cancel-payment" data-team-id="${team.id}">Zrušit platbu</button>` : ""}
-            <button class="btn-small btn-delete btn-delete-team" data-team-id="${team.id}">Smazat</button>
-          </div>
-        </div>
-      </div>`;
+        </div>`;
+    }
+
+    html += `</div>`;
+    return html;
   }
 
   function renderTeamsList() {
@@ -1197,40 +1274,53 @@
 
     if (confirmed.length) {
       html += `<div class="teams-section-header teams-section--confirmed">Potvrzené (${confirmed.length})</div>`;
-      html += confirmed.map(renderTeamCard).join("");
+      html += confirmed.map(renderTeamRow).join("");
     }
 
     if (unconfirmed.length) {
       html += `<div class="teams-section-header teams-section--unconfirmed">Nepotvrzené (${unconfirmed.length})</div>`;
-      html += unconfirmed.map(renderTeamCard).join("");
+      html += unconfirmed.map(renderTeamRow).join("");
     }
 
     list.innerHTML = html;
 
+    // Row toggle
+    list.querySelectorAll(".team-row-summary").forEach((row) => {
+      row.addEventListener("click", () => {
+        const id = Number(row.dataset.teamId);
+        expandedTeamId = expandedTeamId === id ? null : id;
+        renderTeamsList();
+      });
+    });
+
     // Payment buttons
     list.querySelectorAll(".btn-payment").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         setTeamPayment(Number(btn.dataset.teamId), btn.dataset.status);
       });
     });
 
     // Cancel payment buttons
     list.querySelectorAll(".btn-cancel-payment").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         setTeamPayment(Number(btn.dataset.teamId), null);
       });
     });
 
     // Confirm buttons
     list.querySelectorAll(".btn-confirm-team").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         confirmTeam(Number(btn.dataset.teamId));
       });
     });
 
     // Delete buttons
     list.querySelectorAll(".btn-delete-team").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         deleteTeam(Number(btn.dataset.teamId));
       });
     });
@@ -1244,7 +1334,7 @@
       if (team) team.payment_status = status;
       renderTeamsList();
     } catch (err) {
-      alert("Chyba: " + err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -1252,40 +1342,20 @@
     const team = quizTeams.find((t) => t.id === teamId);
     if (!team) return;
 
-    // Show confirmation modal
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.innerHTML = `
-      <div class="modal">
-        <h3>Potvrdit účast?</h3>
-        <p>Týmu <strong>${esc(team.icon)} ${esc(team.team_name)}</strong> bude odeslán potvrzující email.</p>
-        <div class="modal-btns">
-          <button class="btn-secondary" id="modal-cancel">Zrušit</button>
-          <button class="btn-primary" id="modal-ok">Odeslat</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
+    const msg = team.confirmed_at
+      ? `Týmu <strong>${esc(team.icon)} ${esc(team.team_name)}</strong> bude znovu odeslán potvrzující email.`
+      : `Týmu <strong>${esc(team.icon)} ${esc(team.team_name)}</strong> bude odeslán potvrzující email.`;
 
-    document.getElementById("modal-cancel").addEventListener("click", () => {
-      overlay.remove();
-    });
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) overlay.remove();
-    });
+    if (!await showConfirm("Potvrdit účast?", msg)) return;
 
-    document.getElementById("modal-ok").addEventListener("click", async () => {
-      const okBtn = document.getElementById("modal-ok");
-      okBtn.disabled = true;
-      okBtn.textContent = "Odesílání…";
-      try {
-        await api("POST", "/teams/" + teamId + "/confirm");
-        overlay.remove();
-        alert("Potvrzující email odeslán!");
-      } catch (err) {
-        overlay.remove();
-        alert("Chyba: " + err.message);
-      }
-    });
+    try {
+      await api("POST", "/teams/" + teamId + "/confirm");
+      team.confirmed_at = new Date().toISOString();
+      renderTeamsList();
+      showToast("Potvrzující email odeslán!");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
   }
 
   // ── Quiz Results (Vyhlásit) ──
@@ -1435,20 +1505,20 @@
         btn.textContent = "Uložit";
       }, 1500);
     } catch (err) {
-      alert("Chyba: " + err.message);
+      showToast(err.message, "error");
       btn.disabled = false;
       btn.textContent = "Uložit";
     }
   }
 
   async function deleteTeam(teamId) {
-    if (!confirm("Opravdu smazat tým z kvízu?")) return;
+    if (!await showConfirm("Smazat tým", "Opravdu smazat tento tým z kvízu?")) return;
     try {
       await api("DELETE", "/teams/" + teamId);
       quizTeams = quizTeams.filter((t) => t.id !== teamId);
       renderTeamsList();
     } catch (err) {
-      alert("Chyba: " + err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -1463,6 +1533,18 @@
     currentPage = "galerie";
     renderLogin();
   }
+
+  // ── Hash navigation ──
+  window.addEventListener("hashchange", () => {
+    const page = location.hash.replace("#", "");
+    if (page && page !== currentPage && pages[page]) {
+      stopTeamsPolling();
+      currentPage = page;
+      currentQuizId = null;
+      resultsMode = false;
+      renderDashboard();
+    }
+  });
 
   // ── Init ──
   checkSession();
