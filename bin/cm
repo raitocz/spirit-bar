@@ -35,17 +35,166 @@ case "${1:-help}" in
       exit 1
     fi
     ADM_USER_LOWER=$(echo "$ADM_USER" | tr '[:upper:]' '[:lower:]')
-    HASH=$(node -e "
+    HASH=$(echo -n "$ADM_PASS" | node -e "
       const crypto = require('crypto');
-      const salt = crypto.randomBytes(16);
-      const saltHex = salt.toString('hex');
-      crypto.pbkdf2(process.argv[1], salt, 100000, 32, 'sha256', (err, key) => {
-        console.log('pbkdf2:100000:' + saltHex + ':' + key.toString('hex'));
+      let pass = '';
+      process.stdin.on('data', d => pass += d);
+      process.stdin.on('end', () => {
+        const salt = crypto.randomBytes(16);
+        const saltHex = salt.toString('hex');
+        crypto.pbkdf2(pass, salt, 100000, 32, 'sha256', (err, key) => {
+          console.log('pbkdf2:100000:' + saltHex + ':' + key.toString('hex'));
+        });
       });
-    " "$ADM_PASS")
+    ")
     npx wrangler d1 execute "$DB_NAME" --local \
       --command "INSERT INTO admins (username, password_hash) VALUES ('$ADM_USER_LOWER', '$HASH')"
     echo "Admin user '$ADM_USER_LOWER' created."
+    ;;
+  create-admin:prod)
+    echo "Creating admin user on PRODUCTION..."
+    read -rp "Username: " ADM_USER
+    if [ -z "$ADM_USER" ]; then
+      echo "Error: username cannot be empty" >&2
+      exit 1
+    fi
+    read -rsp "Password: " ADM_PASS
+    echo
+    if [ -z "$ADM_PASS" ]; then
+      echo "Error: password cannot be empty" >&2
+      exit 1
+    fi
+    ADM_USER_LOWER=$(echo "$ADM_USER" | tr '[:upper:]' '[:lower:]')
+    HASH=$(echo -n "$ADM_PASS" | node -e "
+      const crypto = require('crypto');
+      let pass = '';
+      process.stdin.on('data', d => pass += d);
+      process.stdin.on('end', () => {
+        const salt = crypto.randomBytes(16);
+        const saltHex = salt.toString('hex');
+        crypto.pbkdf2(pass, salt, 100000, 32, 'sha256', (err, key) => {
+          console.log('pbkdf2:100000:' + saltHex + ':' + key.toString('hex'));
+        });
+      });
+    ")
+    npx wrangler d1 execute "$DB_NAME" --remote \
+      --command "INSERT INTO admins (username, password_hash) VALUES ('$ADM_USER_LOWER', '$HASH')"
+    echo "Admin user '$ADM_USER_LOWER' created on production."
+    ;;
+  db:snapshot:prod)
+    SNAP_DIR="snapshots"
+    mkdir -p "$SNAP_DIR"
+    FILENAME="snapshot-$(date +%d%m%Y-%H%M%S).sql"
+    echo "Exporting production DB to $SNAP_DIR/$FILENAME ..."
+    npx wrangler d1 export "$DB_NAME" --remote --output "$SNAP_DIR/$FILENAME"
+    echo "Snapshot saved: $SNAP_DIR/$FILENAME"
+    ;;
+  db:snapshots)
+    SNAP_DIR="snapshots"
+    if [ ! -d "$SNAP_DIR" ] || [ -z "$(ls -A "$SNAP_DIR" 2>/dev/null)" ]; then
+      echo "No snapshots found."
+      exit 0
+    fi
+    echo "Available snapshots:"
+    ls -1t "$SNAP_DIR"/*.sql 2>/dev/null | while read -r f; do
+      SIZE=$(du -h "$f" | cut -f1)
+      echo "  $(basename "$f")  ($SIZE)"
+    done
+    ;;
+  db:snapshot:latest)
+    SNAP_DIR="snapshots"
+    LATEST=$(ls -1t "$SNAP_DIR"/*.sql 2>/dev/null | head -1)
+    if [ -z "$LATEST" ]; then
+      echo "No snapshots found. Run 'cm db:snapshot:prod' first."
+      exit 1
+    fi
+    echo "Latest snapshot: $(basename "$LATEST")"
+    echo ""
+    echo "WARNING: This will OVERWRITE your local D1 database."
+    read -rp "Continue? [y/N] " CONFIRM
+    if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
+      echo "Aborted."
+      exit 0
+    fi
+    echo "Wiping local D1..."
+    LOCAL_DB=$(find .wrangler/state -name "*.sqlite" -path "*/d1/*" 2>/dev/null | head -1)
+    if [ -n "$LOCAL_DB" ]; then
+      rm -f "$LOCAL_DB" "${LOCAL_DB}-wal" "${LOCAL_DB}-shm"
+    fi
+    echo "Importing $(basename "$LATEST")..."
+    npx wrangler d1 execute "$DB_NAME" --local --file "$LATEST"
+    echo "Done. Local DB restored from $(basename "$LATEST")."
+    ;;
+  r2:download)
+    R2_BUCKET="spirit-bar-photos"
+    R2_TMP=$(mktemp -d)
+    trap 'rm -rf "$R2_TMP"' EXIT
+
+    echo "Fetching photo list from production DB..."
+    KEYS_JSON=$(npx wrangler d1 execute "$DB_NAME" --remote --json \
+      --command "SELECT r2_key FROM gallery_photos ORDER BY id")
+
+    KEYS=$(echo "$KEYS_JSON" | node -e "
+      let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+        const rows = JSON.parse(d)[0].results;
+        rows.forEach(r => console.log(r.r2_key));
+      });
+    ")
+
+    TOTAL=$(echo "$KEYS" | grep -c . || true)
+    if [ "$TOTAL" -eq 0 ]; then
+      echo "No photos found in production."
+      exit 0
+    fi
+
+    echo ""
+    echo "Found $TOTAL photos in production R2."
+    echo "WARNING: This will OVERWRITE matching files in your local R2."
+    read -rp "Continue? [y/N] " CONFIRM
+    if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
+      echo "Aborted."
+      exit 0
+    fi
+
+    COLS=$(tput cols 2>/dev/null || echo 80)
+
+    progress() {
+      local LABEL=$1 COUNT=$2 TOTAL=$3
+      local PCT=$((COUNT * 100 / TOTAL))
+      local BAR_W=30
+      local FILLED=$((PCT * BAR_W / 100))
+      local EMPTY=$((BAR_W - FILLED))
+      local BAR=""
+      for ((i=0; i<FILLED; i++)); do BAR+="█"; done
+      for ((i=0; i<EMPTY;  i++)); do BAR+="░"; done
+      local LINE
+      LINE=$(printf "  %s [%s] %3d%% (%d/%d)" "$LABEL" "$BAR" "$PCT" "$COUNT" "$TOTAL")
+      printf "\r%-${COLS}s" "$LINE"
+    }
+
+    # Phase 1: Download from production
+    echo ""
+    COUNT=0
+    while IFS= read -r KEY; do
+      [ -z "$KEY" ] && continue
+      COUNT=$((COUNT + 1))
+      progress "Downloading" "$COUNT" "$TOTAL"
+      mkdir -p "$R2_TMP/$(dirname "$KEY")"
+      npx wrangler r2 object get "$R2_BUCKET/$KEY" --file "$R2_TMP/$KEY" --remote >/dev/null 2>&1
+    done <<< "$KEYS"
+    echo ""
+
+    # Phase 2: Upload to local R2
+    COUNT=0
+    while IFS= read -r KEY; do
+      [ -z "$KEY" ] && continue
+      COUNT=$((COUNT + 1))
+      progress "Importing " "$COUNT" "$TOTAL"
+      npx wrangler r2 object put "$R2_BUCKET/$KEY" --file "$R2_TMP/$KEY" --local >/dev/null 2>&1
+    done <<< "$KEYS"
+    echo ""
+
+    echo "Done. $TOTAL photos synced to local R2."
     ;;
   test)
     npx vitest run
@@ -55,16 +204,36 @@ case "${1:-help}" in
     echo "Use: npx wrangler d1 execute $DB_NAME --local --command 'YOUR SQL'"
     ;;
   help|*)
-    echo "Usage: ./cm <command>"
+    C="\033[36m"  # cyan
+    D="\033[2m"   # dim
+    B="\033[1m"   # bold
+    R="\033[0m"   # reset
+
     echo ""
-    echo "  up               Start local dev server (wrangler dev)"
-    echo "  deploy           Deploy to Cloudflare Workers"
-    echo "  db:create        Create D1 database"
-    echo "  db:migrate       Run migrations locally"
-    echo "  db:migrate:prod  Run migrations on production"
-    echo "  create-admin     Create admin user interactively"
-    echo "  test             Run tests"
-    echo "  db:console       Open local D1 console"
-    echo "  help             Show this help"
+    echo -e "${B}Usage:${R} cm <command>"
+    echo ""
+    echo -e "${C}Development${R}"
+    echo -e "  ${B}up${R}                  Start local dev server (localhost:8787)"
+    echo -e "  ${B}test${R}                Run tests (vitest)"
+    echo -e "  ${B}db:console${R}          Open local D1 console"
+    echo ""
+    echo -e "${C}Database${R}"
+    echo -e "  ${B}db:create${R}           Create D1 database on Cloudflare"
+    echo -e "  ${B}db:migrate${R}          Run migrations ${D}(local)${R}"
+    echo -e "  ${B}db:migrate:prod${R}     Run migrations ${D}(production)${R}"
+    echo ""
+    echo -e "${C}Snapshots${R}"
+    echo -e "  ${B}db:snapshot:prod${R}    Export production DB to snapshots/"
+    echo -e "  ${B}db:snapshots${R}        List all available snapshots"
+    echo -e "  ${B}db:snapshot:latest${R}  Restore latest snapshot to local DB"
+    echo -e "  ${B}r2:download${R}         Download production photos to local R2"
+    echo ""
+    echo -e "${C}Admin${R}"
+    echo -e "  ${B}create-admin${R}        Create admin user ${D}(local)${R}"
+    echo -e "  ${B}create-admin:prod${R}   Create admin user ${D}(production)${R}"
+    echo ""
+    echo -e "${C}Deploy${R}"
+    echo -e "  ${B}deploy${R}              Deploy to Cloudflare Workers"
+    echo ""
     ;;
 esac

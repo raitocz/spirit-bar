@@ -19,5 +19,4 @@ migrations_dir = "migrations"
 binding = "PHOTOS"
 bucket_name = "spirit-bar-photos"
 
-[vars]
-ENVIRONMENT = "development"
+# ENVIRONMENT is set in .dev.vars for local dev only
