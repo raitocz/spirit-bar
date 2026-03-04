@@ -58,7 +58,8 @@ spirit-bar/
 │   ├── index.ts               # Hono entry point, CORS, route mounting
 │   ├── lib/
 │   │   ├── auth.ts            # PBKDF2 + JWT helpers
-│   │   └── layout.ts          # Shared HTML shell for public subpages
+│   │   ├── email.ts           # Email sending (Resend) + templates
+│   │   └── layout.ts          # Shared HTML shell + errorPage()
 │   └── routes/
 │       ├── api.ts             # Public API (/api/*)
 │       ├── dungeon.ts         # Admin panel (/dungeon/*)
@@ -70,7 +71,12 @@ spirit-bar/
 │   ├── 0003_create_galleries.sql
 │   ├── 0004_create_gallery_photos.sql
 │   ├── 0005_create_quizzes.sql
-│   └── 0006_create_quiz_teams.sql
+│   ├── 0006_create_quiz_teams.sql
+│   └── 0007_add_quiz_results.sql
+├── test/
+│   ├── api.test.ts            # Public API tests
+│   └── dungeon.test.ts        # Admin API tests
+├── vitest.config.ts
 ├── bin/
 │   └── cm                     # Dev commands (bash)
 ├── wrangler.toml
@@ -91,9 +97,9 @@ spirit-bar/
 | `GET /dungeon` | Worker → Hono | Admin SPA (inline HTML) |
 | `GET /dungeon/photos/:key` | Worker → Hono → R2 | Serve gallery photos from R2 |
 | `*/dungeon/api/*` | Worker → Hono | Admin API (auth-protected) |
-| `GET /*` | Worker catch-all | 404 |
+| `GET /*` | Worker catch-all | Branded 404 error page |
 
-Public subpages (`/galerie`, `/kviz`) use a shared HTML shell from `src/lib/layout.ts` that includes the site nav, footer, theme toggle, and scroll behaviour.
+Public subpages (`/galerie`, `/kviz`) and error pages use a shared HTML shell from `src/lib/layout.ts` that includes the site nav, footer, theme toggle, and scroll behaviour. The `errorPage(status)` function renders branded error pages for 403, 404, 500 (with funny Czech texts and inline SVG icons).
 
 ## Brand
 
@@ -130,6 +136,7 @@ The brand gradient always runs `#2635d4 → #00cfff`. Do not use gold/amber – 
 | POST | `/api/quizzes/:id/register` | Register a team (body: `{team_name, icon, email, members[]}`) |
 | GET | `/api/galleries` | List all galleries (with cover photo) |
 | GET | `/api/galleries/:id` | Gallery detail with photos |
+| GET | `/api/quizzes/:id/results` | Get quiz results (placements + scores) |
 | POST | `/api/quiz/register` | Legacy quiz registration (body: `{name, email, phone?}`) |
 
 ## Admin panel (/dungeon)
@@ -140,7 +147,7 @@ Protected admin SPA at `/dungeon`. Auth via PBKDF2 password hashing + JWT in htt
 - Create an admin user locally with `cm create-admin` (prompts for username and password)
 - Login rate-limited: 5 attempts per IP per 15 min
 
-Dashboard sections: **Galerie** (full CRUD + photo upload/reorder), **Kvízy** (CRUD + team management/payments), Nastavení (placeholder).
+Dashboard sections: **Galerie** (full CRUD + photo upload/reorder), **Kvízy** (CRUD + team management/payments/confirmation emails/results), Pošta (dev mail catcher), Nastavení (placeholder).
 
 ### Dungeon API routes (auth-protected)
 
@@ -163,7 +170,9 @@ Dashboard sections: **Galerie** (full CRUD + photo upload/reorder), **Kvízy** (
 | DELETE | `/dungeon/api/quizzes/:id` | Delete quiz |
 | GET | `/dungeon/api/quizzes/:id/teams` | List teams with members |
 | PUT | `/dungeon/api/teams/:id/payment` | Set payment status (cash/card/bank/free/null) |
+| POST | `/dungeon/api/teams/:id/confirm` | Send confirmation email to paid team |
 | DELETE | `/dungeon/api/teams/:id` | Delete team |
+| PUT | `/dungeon/api/quizzes/:id/results` | Set team placements & scores (past quizzes only) |
 | GET | `/dungeon/api/mail` | Dev mail catcher (returns `[]` in prod) |
 | DELETE | `/dungeon/api/mail` | Clear caught emails |
 | GET | `/dungeon/api/quiz/registrations` | Legacy quiz registrations list |
@@ -173,16 +182,19 @@ Dashboard sections: **Galerie** (full CRUD + photo upload/reorder), **Kvízy** (
 `app.js` is a single-file vanilla JS IIFE with:
 - **DatePicker** – custom calendar dropdown (Czech day/month names, `dd. mm. yyyy` format, ISO value in `dataset.value`)
 - **Galerie** – CRUD forms, photo upload with client-side resize to webp, drag-and-drop reorder
-- **Kvízy** – CRUD forms (defaults: 8 teams, 400 CZK, auto-incrementing quiz number), list split into "Nadcházející"/"Proběhlé", team detail with payment management and 10s auto-polling
+- **Kvízy** – CRUD forms (defaults: 8 teams, 400 CZK, auto-incrementing quiz number), list split into "Nadcházející"/"Proběhlé", team detail with payment management, confirmation email sending, 10s auto-polling, and results entry (drag-and-drop placement for past quizzes)
 
 ## Email
 
 Transactional email abstraction in `src/lib/email.ts`.
 
 - **`sendEmail(env, { to, subject, html, text? })`** — sends an email
+- **`quizRegistrationEmail(opts)`** — registration confirmation with payment QR code
+- **`quizConfirmationEmail(opts)`** — payment confirmed / participation confirmed email
 - **Production:** uses [Resend API](https://resend.com). Set key via `wrangler secret put RESEND_API_KEY`
 - **Development:** `ENVIRONMENT=development` in `wrangler.toml` causes emails to be caught in-memory instead of sent. View caught emails in Dungeon → Pošta section.
 - In-memory mailbox holds max 100 emails (FIFO). `getMailbox()` / `clearMailbox()` for programmatic access.
+- All email templates use `emailLayout()` wrapper (branded dark theme, logo, footer with address).
 
 ## Database
 
@@ -195,5 +207,21 @@ D1 binding name: `DB`. R2 binding name: `PHOTOS`. Migrations are in `migrations/
 - `galleries` – photo galleries (title, description, date_from, date_to)
 - `gallery_photos` – photos in galleries (gallery_id, filename, r2_key, width, height, size_bytes, sort_order)
 - `quizzes` – quiz events (quiz_number, date, max_participants, price)
-- `quiz_teams` – registered teams (quiz_id, team_name, icon, email, payment_status)
+- `quiz_teams` – registered teams (quiz_id, team_name, icon, email, payment_status, placement, score)
 - `quiz_team_members` – team members (team_id, name)
+
+## Testing
+
+Tests use **Vitest** with `@cloudflare/vitest-pool-workers`. Run with `npx vitest run`.
+
+- `test/api.test.ts` – public API endpoint tests
+- `test/dungeon.test.ts` – admin API endpoint tests (auth, galleries, quizzes)
+
+## Deployment
+
+Auto-deploy from GitHub via Cloudflare Workers Build & Deploy:
+- **Branch:** `deploy` (push to trigger)
+- **Build command:** `npm install`
+- **Deploy command:** `npx wrangler deploy`
+
+Secrets (`JWT_SECRET`, `RESEND_API_KEY`) are set via `wrangler secret put`.
