@@ -1,0 +1,2 @@
+ALTER TABLE quiz_teams ADD COLUMN placement INTEGER;
+ALTER TABLE quiz_teams ADD COLUMN score INTEGER;
