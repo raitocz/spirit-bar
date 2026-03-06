@@ -24,14 +24,22 @@ function closeNav()  { document.getElementById('navLinks').classList.remove('ope
 })();
 
 function updateThemeButtons(isLight) {
+  var lightLabel = typeof t === 'function' ? t('hero.theme_light') : 'Světlý motiv';
+  var darkLabel  = typeof t === 'function' ? t('hero.theme_dark')  : 'Tmavý motiv';
+  var icon = isLight ? '☀️' : '🌙';
+  var label = isLight ? darkLabel : lightLabel;
+
   var nav = document.getElementById('themeToggle');
-  if (nav) nav.textContent = isLight ? '☀️' : '🌙';
+  if (nav) {
+    var navIcon = nav.querySelector('.theme-toggle-icon');
+    var navLabel = nav.querySelector('.theme-toggle-label');
+    if (navIcon) navIcon.textContent = icon;
+    if (navLabel) navLabel.textContent = label;
+  }
   var hero = document.querySelector('.hero-theme-toggle');
   if (hero) {
-    hero.querySelector('.hero-theme-icon').textContent = isLight ? '☀️' : '🌙';
-    var lightLabel = typeof t === 'function' ? t('hero.theme_light') : 'Světlý motiv';
-    var darkLabel  = typeof t === 'function' ? t('hero.theme_dark')  : 'Tmavý motiv';
-    hero.lastChild.textContent = isLight ? ' ' + darkLabel : ' ' + lightLabel;
+    hero.querySelector('.hero-theme-icon').textContent = icon;
+    hero.lastChild.textContent = ' ' + label;
   }
 }
 

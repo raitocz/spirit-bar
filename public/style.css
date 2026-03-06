@@ -1569,6 +1569,59 @@ footer {
   }
   .nav-links.open { display: flex; }
   .hamburger { display: flex; }
+
+  /* Language picker – full width in mobile menu */
+  .nav-links .lang-picker {
+    width: 100%;
+  }
+  .nav-links .lang-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .7rem 1rem;
+    font-size: 1.05rem;
+    border-radius: var(--radius);
+    color: var(--text);
+  }
+  .nav-links .lang-btn-label {
+    display: inline;
+    font-size: .95rem;
+  }
+  .nav-links .lang-chevron {
+    display: inline;
+    font-size: .8rem;
+  }
+  .nav-links .lang-dropdown {
+    position: static;
+    margin-top: .4rem;
+    width: 100%;
+    box-shadow: none;
+    border-radius: var(--radius);
+    background: rgba(255,255,255,.04);
+  }
+  .nav-links .lang-option {
+    padding: .6rem 1.2rem;
+  }
+
+  /* Theme toggle – full width in mobile menu */
+  .nav-links li:has(.theme-toggle) {
+    width: 100%;
+  }
+  .nav-links .theme-toggle {
+    width: 100%;
+    border-radius: var(--radius);
+    height: auto;
+    padding: .7rem 1rem;
+    gap: .6rem;
+    justify-content: flex-start;
+    font-size: 1.05rem;
+    color: var(--text);
+  }
+  .nav-links .theme-toggle-label {
+    display: inline;
+    font-size: .95rem;
+  }
 }
 @media (max-width: 640px) {
   .hero-buttons { flex-direction: column; align-items: center; }
@@ -1598,6 +1651,15 @@ footer {
   line-height: 1;
   transition: border-color .3s, background .3s;
 }
+.lang-btn-label { display: none; }
+.lang-chevron {
+  display: none;
+  margin-left: auto;
+  font-size: .7rem;
+  opacity: .5;
+  transition: transform .2s;
+}
+.lang-picker--open .lang-chevron { transform: rotate(180deg); }
 .lang-btn:hover {
   border-color: var(--cyan);
   background: rgba(0,207,255,.1);
@@ -1667,6 +1729,7 @@ body.light .lang-option.lang-active { color: var(--blue); }
   transition: .25s;
   padding: 0;
 }
+.theme-toggle-label { display: none; }
 .theme-toggle:hover {
   border-color: var(--cyan);
   background: rgba(0,207,255,.1);
@@ -1887,5 +1950,14 @@ body.light .theme-toggle:hover {
   body.light .nav-links {
     background: rgba(240,244,250,.97);
     border-bottom-color: rgba(38,53,212,.1);
+  }
+  body.light .nav-links .lang-dropdown {
+    background: rgba(0,0,0,.03);
+  }
+  body.light .nav-links .theme-toggle {
+    color: #1a1a2e;
+  }
+  body.light .nav-links .lang-btn {
+    color: #1a1a2e;
   }
 }

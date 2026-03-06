@@ -1092,7 +1092,7 @@
     var pagePath = stripLang(location.pathname);
 
     var html =
-      '<button class="lang-btn" aria-label="Language">' + current.flag + "</button>" +
+      '<button class="lang-btn" aria-label="Language">' + current.flag + '<span class="lang-btn-label"> ' + current.name + '</span><span class="lang-chevron">\u25BE</span></button>' +
       '<div class="lang-dropdown">';
 
     LANG_CODES.forEach(function (code) {
@@ -1113,12 +1113,14 @@
     var dropdown = container.querySelector(".lang-dropdown");
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
-      dropdown.classList.toggle("open");
+      var isOpen = dropdown.classList.toggle("open");
+      container.classList.toggle("lang-picker--open", isOpen);
     });
 
     // Close on outside click
     document.addEventListener("click", function () {
       dropdown.classList.remove("open");
+      container.classList.remove("lang-picker--open");
     });
   }
 
