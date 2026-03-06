@@ -128,9 +128,9 @@ export function pageShell(opts: PageOptions): string {
   </a>
   <ul class="nav-links" id="navLinks">
       ${navItems}
-    <li id="langPicker" class="lang-picker"></li>
     <li><button id="themeToggle" class="theme-toggle" aria-label="Přepnout motiv"><span class="theme-toggle-icon">🌙</span><span class="theme-toggle-label">Světlý motiv</span></button></li>
   </ul>
+  <div id="langPicker" class="lang-picker"></div>
   <button class="hamburger" id="hamburger" aria-label="Menu">
     <span></span><span></span><span></span>
   </button>
