@@ -24,12 +24,22 @@ function closeNav()  { document.getElementById('navLinks').classList.remove('ope
 })();
 
 function updateThemeButtons(isLight) {
+  var lightLabel = typeof t === 'function' ? t('hero.theme_light') : 'Světlý motiv';
+  var darkLabel  = typeof t === 'function' ? t('hero.theme_dark')  : 'Tmavý motiv';
+  var icon = isLight ? '☀️' : '🌙';
+  var label = isLight ? darkLabel : lightLabel;
+
   var nav = document.getElementById('themeToggle');
-  if (nav) nav.textContent = isLight ? '☀️' : '🌙';
+  if (nav) {
+    var navIcon = nav.querySelector('.theme-toggle-icon');
+    var navLabel = nav.querySelector('.theme-toggle-label');
+    if (navIcon) navIcon.textContent = icon;
+    if (navLabel) navLabel.textContent = label;
+  }
   var hero = document.querySelector('.hero-theme-toggle');
   if (hero) {
-    hero.querySelector('.hero-theme-icon').textContent = isLight ? '☀️' : '🌙';
-    hero.lastChild.textContent = isLight ? ' Tmavý motiv' : ' Světlý motiv';
+    hero.querySelector('.hero-theme-icon').textContent = icon;
+    hero.lastChild.textContent = ' ' + label;
   }
 }
 
@@ -48,6 +58,8 @@ function toggleTheme() {
 (function () {
   var btn = document.getElementById('quizHeroBtn');
   if (!btn) return;
+  var prefix = typeof langPrefix === 'function' ? langPrefix() : '';
+  btn.setAttribute('href', prefix + '/kviz');
   fetch('/api/quizzes').then(function (r) { return r.json(); }).then(function (quizzes) {
     var today = new Date().toISOString().slice(0, 10);
     var hasUpcoming = quizzes.some(function (q) { return q.date >= today; });

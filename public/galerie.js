@@ -1,11 +1,21 @@
 (function () {
-  const app = document.getElementById("galerie-app");
-  let cache = {};
+  var app = document.getElementById("galerie-app");
+  var cache = {};
+
+  function tt(key) {
+    return typeof t === "function" ? t(key) : key;
+  }
+
+  function prefix() {
+    return typeof langPrefix === "function" ? langPrefix() : "";
+  }
 
   function formatDate(dateStr) {
     if (!dateStr) return "";
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric" });
+    var d = new Date(dateStr + "T00:00:00");
+    var lang = (typeof currentLang !== "undefined" && currentLang !== "sigma") ? currentLang : "en";
+    if (lang === "cs") lang = "cs-CZ";
+    return d.toLocaleDateString(lang, { day: "numeric", month: "long", year: "numeric" });
   }
 
   function photoUrl(r2Key) {
@@ -18,26 +28,26 @@
 
     try {
       if (!cache.list) {
-        const res = await fetch("/api/galleries");
+        var res = await fetch("/api/galleries");
         cache.list = await res.json();
       }
-      const galleries = cache.list;
+      var galleries = cache.list;
 
       if (!galleries.length) {
         app.innerHTML =
           '<div class="container" style="padding-top:8rem;text-align:center;">' +
-          '<p class="section-label">Galerie</p>' +
-          '<h2 class="section-title">Zatím žádné galerie</h2>' +
+          '<p class="section-label">' + escHtml(tt("galerie.label")) + '</p>' +
+          '<h2 class="section-title">' + escHtml(tt("galerie.empty_title")) + '</h2>' +
           '<div class="section-divider" style="margin:1rem auto 2rem;"></div>' +
-          '<p style="color:var(--muted);">Brzy sem přidáme fotky z našich akcí.</p>' +
+          '<p style="color:var(--muted);">' + escHtml(tt("galerie.empty_desc")) + '</p>' +
           "</div>";
         return;
       }
 
-      // Group by year (already sorted DESC from API)
+      // Group by year
       var byYear = {};
       galleries.forEach(function (g) {
-        var year = g.date_from ? g.date_from.slice(0, 4) : "—";
+        var year = g.date_from ? g.date_from.slice(0, 4) : "\u2014";
         if (!byYear[year]) byYear[year] = [];
         byYear[year].push(g);
       });
@@ -45,8 +55,8 @@
 
       var html =
         '<div class="container" style="padding-top:8rem;">' +
-        '<p class="section-label">Galerie</p>' +
-        '<h2 class="section-title">Fotogalerie</h2>' +
+        '<p class="section-label">' + escHtml(tt("galerie.label")) + '</p>' +
+        '<h2 class="section-title">' + escHtml(tt("galerie.title")) + '</h2>' +
         '<div class="section-divider"></div>';
 
       years.forEach(function (year) {
@@ -59,10 +69,10 @@
             : '<div class="galerie-card-placeholder"></div>';
 
           var dateLabel = formatDate(g.date_from);
-          if (g.date_to) dateLabel += " – " + formatDate(g.date_to);
+          if (g.date_to) dateLabel += " \u2013 " + formatDate(g.date_to);
 
           html +=
-            '<a href="/galerie/' + g.id + '" class="galerie-card" data-id="' + g.id + '">' +
+            '<a href="' + prefix() + '/galerie/' + g.id + '" class="galerie-card" data-id="' + g.id + '">' +
             '<div class="galerie-card-img">' + cover + '</div>' +
             '<div class="galerie-card-overlay">' +
             '<h3>' + escHtml(g.title) + "</h3>" +
@@ -82,14 +92,14 @@
         card.addEventListener("click", function (e) {
           e.preventDefault();
           var id = card.dataset.id;
-          history.pushState(null, "", "/galerie/" + id);
+          history.pushState(null, "", prefix() + "/galerie/" + id);
           renderDetail(id);
         });
       });
     } catch (err) {
       app.innerHTML =
         '<div class="container" style="padding-top:8rem;text-align:center;">' +
-        '<p style="color:var(--muted);">Galerie se nepodařilo načíst.</p></div>';
+        '<p style="color:var(--muted);">' + escHtml(tt("galerie.load_error")) + '</p></div>';
     }
   }
 
@@ -107,12 +117,12 @@
       var gallery = cache[cacheKey];
 
       var dateLabel = formatDate(gallery.date_from);
-      if (gallery.date_to) dateLabel += " – " + formatDate(gallery.date_to);
+      if (gallery.date_to) dateLabel += " \u2013 " + formatDate(gallery.date_to);
 
       var html =
         '<div class="container" style="padding-top:8rem;">' +
         '<div class="galerie-detail-header">' +
-        '<a href="/galerie" class="galerie-back">&larr; Zpět na galerie</a>' +
+        '<a href="' + prefix() + '/galerie" class="galerie-back">' + escHtml(tt("galerie.back")) + '</a>' +
         '<h2 class="section-title">' + escHtml(gallery.title) + "</h2>" +
         '<span class="galerie-detail-date">' + dateLabel + "</span>";
 
@@ -133,7 +143,7 @@
         });
         html += "</div>";
       } else {
-        html += '<p style="color:var(--muted);margin-top:2rem;">Tato galerie zatím nemá žádné fotky.</p>';
+        html += '<p style="color:var(--muted);margin-top:2rem;">' + escHtml(tt("galerie.no_photos")) + '</p>';
       }
 
       html += "</div>";
@@ -144,12 +154,12 @@
       if (backLink) {
         backLink.addEventListener("click", function (e) {
           e.preventDefault();
-          history.pushState(null, "", "/galerie");
+          history.pushState(null, "", prefix() + "/galerie");
           renderList();
         });
       }
 
-      // Lightbox on photo click
+      // Lightbox
       app.querySelectorAll(".galerie-photo img").forEach(function (img) {
         img.addEventListener("click", function () {
           openLightbox(img.src);
@@ -158,13 +168,13 @@
     } catch (err) {
       app.innerHTML =
         '<div class="container" style="padding-top:8rem;text-align:center;">' +
-        '<a href="/galerie" class="galerie-back">&larr; Zpět na galerie</a>' +
-        '<p style="color:var(--muted);margin-top:2rem;">Galerie nenalezena.</p></div>';
+        '<a href="' + prefix() + '/galerie" class="galerie-back">' + escHtml(tt("galerie.back")) + '</a>' +
+        '<p style="color:var(--muted);margin-top:2rem;">' + escHtml(tt("galerie.not_found")) + '</p></div>';
 
       var bl = app.querySelector(".galerie-back");
       if (bl) bl.addEventListener("click", function (e) {
         e.preventDefault();
-        history.pushState(null, "", "/galerie");
+        history.pushState(null, "", prefix() + "/galerie");
         renderList();
       });
     }
@@ -184,7 +194,9 @@
   // ── Router ──
   function route() {
     var path = location.pathname;
-    var match = path.match(/^\/galerie\/(\d+)/);
+    // Strip lang prefix for matching
+    var clean = path.replace(/^\/(en|de|pl|sigma)/, "");
+    var match = clean.match(/^\/galerie\/(\d+)/);
     if (match) {
       renderDetail(match[1]);
     } else {

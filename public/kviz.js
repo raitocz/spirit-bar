@@ -1,4 +1,4 @@
-// SPiRiT – Kvíz public page
+// SPiRiT - Kviz public page (i18n-aware)
 (function () {
   "use strict";
 
@@ -6,6 +6,14 @@
   var openFormQuizId = null;
   var openResultsQuizId = null;
   var quizzesData = [];
+
+  function tt(key) {
+    return typeof t === "function" ? t(key) : key;
+  }
+
+  function prefix() {
+    return typeof langPrefix === "function" ? langPrefix() : "";
+  }
 
   function esc(str) {
     var el = document.createElement("span");
@@ -16,11 +24,13 @@
   function formatDate(iso) {
     if (!iso) return "";
     var d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric" });
+    var lang = (typeof currentLang !== "undefined" && currentLang !== "sigma") ? currentLang : "en";
+    if (lang === "cs") lang = "cs-CZ";
+    return d.toLocaleDateString(lang, { day: "numeric", month: "long", year: "numeric" });
   }
 
   function formatPrice(price) {
-    return price + "\u00a0Kč";
+    return price + "\u00a0K\u010d";
   }
 
   async function init() {
@@ -34,7 +44,7 @@
     } catch (e) {
       container.innerHTML =
         '<div class="container" style="padding-top:8rem;text-align:center;">' +
-        '<p style="color:var(--muted);">Kvízy se nepodařilo načíst.</p></div>';
+        '<p style="color:var(--muted);">' + esc(tt("kviz.load_error")) + '</p></div>';
     }
   }
 
@@ -58,24 +68,24 @@
 
     var html =
       '<div class="kviz-card' + (isPast ? " kviz-card--past" : "") + '" data-quiz-id="' + q.id + '">' +
-        '<div class="kviz-card-number">Kvíz #' + esc(String(q.quiz_number)) + "</div>" +
+        '<div class="kviz-card-number">' + esc(tt("kviz.quiz_number")) + esc(String(q.quiz_number)) + "</div>" +
         '<div class="kviz-card-date">' + formatDate(q.date) + "</div>" +
         '<div class="kviz-card-meta">' +
-          "<span>" + formatPrice(q.price) + " / tým</span>" +
-          '<span class="kviz-card-price">' + esc(String(max)) + " týmů max</span>" +
+          "<span>" + formatPrice(q.price) + " " + esc(tt("kviz.per_team")) + "</span>" +
+          '<span class="kviz-card-price">' + esc(String(max)) + " " + esc(tt("kviz.teams_max")) + "</span>" +
         "</div>";
 
     if (!isPast) {
       html +=
         '<div class="kviz-card-footer">' +
           '<span class="kviz-spots' + (isFull ? " kviz-spots--full" : (spotsLeft <= 2 ? " kviz-spots--low" : "")) + '">' +
-            (isFull ? "Kapacita naplněna" : (spotsLeft <= 2 ? "⚠ " : "") + "Volná místa: " + spotsLeft + "/" + max) +
+            (isFull ? esc(tt("kviz.spots_full")) : (spotsLeft <= 2 ? "\u26A0 " : "") + esc(tt("kviz.spots_left")) + spotsLeft + "/" + max) +
           "</span>";
 
       if (isFull) {
-        html += '<button class="btn kviz-register-btn" disabled>Kapacita naplněna</button>';
+        html += '<button class="btn kviz-register-btn" disabled>' + esc(tt("kviz.spots_full")) + '</button>';
       } else {
-        html += '<button class="btn kviz-register-btn" data-quiz-id="' + q.id + '">Registrovat tým</button>';
+        html += '<button class="btn kviz-register-btn" data-quiz-id="' + q.id + '">' + esc(tt("kviz.register_btn")) + '</button>';
       }
       html += "</div>";
 
@@ -87,7 +97,7 @@
     if (isPast && q.results_count) {
       html +=
         '<div class="kviz-card-footer">' +
-          '<button class="btn kviz-results-btn" data-quiz-id="' + q.id + '">🏆 Výsledky</button>' +
+          '<button class="btn kviz-results-btn" data-quiz-id="' + q.id + '">' + tt("kviz.results_btn") + '</button>' +
         '</div>';
 
       if (openResultsQuizId === q.id) {
@@ -101,9 +111,9 @@
 
   function renderForm(q) {
     var animals = [
-      "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼",
-      "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔",
-      "🐧", "🦉", "🐉", "🦄"
+      "\u{1F436}", "\u{1F431}", "\u{1F42D}", "\u{1F439}", "\u{1F430}", "\u{1F98A}", "\u{1F43B}", "\u{1F43C}",
+      "\u{1F428}", "\u{1F42F}", "\u{1F981}", "\u{1F42E}", "\u{1F437}", "\u{1F438}", "\u{1F435}", "\u{1F414}",
+      "\u{1F427}", "\u{1F989}", "\u{1F409}", "\u{1F984}"
     ];
     var emojiRow = '<div class="kviz-emoji-row">';
     animals.forEach(function (em) {
@@ -114,26 +124,26 @@
     return (
       '<div class="kviz-form" data-quiz-id="' + q.id + '">' +
         '<div class="form-group">' +
-          '<label>Jméno týmu</label>' +
-          '<input type="text" class="kviz-input kviz-team-name" placeholder="Název vašeho týmu" required>' +
+          '<label>' + esc(tt("kviz.form.team_name")) + '</label>' +
+          '<input type="text" class="kviz-input kviz-team-name" placeholder="' + esc(tt("kviz.form.team_name_placeholder")) + '" required>' +
         "</div>" +
         '<div class="form-group">' +
-          '<label>Ikona týmu</label>' +
+          '<label>' + esc(tt("kviz.form.team_icon")) + '</label>' +
           '<input type="hidden" class="kviz-icon-input" value="">' +
           emojiRow +
         "</div>" +
         '<div class="form-group">' +
-          '<label>E-mail</label>' +
-          '<input type="email" class="kviz-input kviz-email" placeholder="kontakt@email.cz" required>' +
+          '<label>' + esc(tt("kviz.form.email")) + '</label>' +
+          '<input type="email" class="kviz-input kviz-email" placeholder="' + esc(tt("kviz.form.email_placeholder")) + '" required>' +
         "</div>" +
         '<div class="kviz-members">' +
           '<div class="kviz-member-row">' +
-            '<input type="text" class="kviz-input kviz-member-input" placeholder="Jméno soutěžícího 1" required>' +
+            '<input type="text" class="kviz-input kviz-member-input" placeholder="' + esc(tt("kviz.form.member_placeholder")) + ' 1" required>' +
           "</div>" +
         "</div>" +
-        '<button type="button" class="kviz-add-member">+ Přidat člena</button>' +
+        '<button type="button" class="kviz-add-member">' + esc(tt("kviz.form.add_member")) + '</button>' +
         '<div class="kviz-form-actions">' +
-          '<button type="button" class="btn btn-primary kviz-submit-btn">Registrovat</button>' +
+          '<button type="button" class="btn btn-primary kviz-submit-btn">' + esc(tt("kviz.form.submit")) + '</button>' +
         "</div>" +
         '<div class="kviz-form-error" style="display:none;"></div>' +
       "</div>"
@@ -143,22 +153,22 @@
   function render(upcoming, past) {
     var html =
       '<div class="container" style="padding-top:8rem;">' +
-      '<p class="section-label">Kvízy</p>' +
-      '<h2 class="section-title">Kvízové večery</h2>' +
+      '<p class="section-label">' + esc(tt("kviz.label")) + '</p>' +
+      '<h2 class="section-title">' + esc(tt("kviz.title")) + '</h2>' +
       '<div class="section-divider"></div>';
 
     if (upcoming.length) {
-      html += '<h3 class="kviz-subheading">Nadcházející</h3>';
+      html += '<h3 class="kviz-subheading">' + esc(tt("kviz.upcoming")) + '</h3>';
       upcoming.forEach(function (q) { html += renderCard(q, false); });
     }
 
     if (past.length) {
-      html += '<h3 class="kviz-subheading kviz-subheading--past">Historie</h3>';
+      html += '<h3 class="kviz-subheading kviz-subheading--past">' + esc(tt("kviz.history")) + '</h3>';
       past.forEach(function (q) { html += renderCard(q, true); });
     }
 
     if (!upcoming.length && !past.length) {
-      html += '<p style="color:var(--muted);margin-top:2rem;">Zatím nejsou naplánovány žádné kvízy.</p>';
+      html += '<p style="color:var(--muted);margin-top:2rem;">' + esc(tt("kviz.no_quizzes")) + '</p>';
     }
 
     html += "</div>";
@@ -218,7 +228,6 @@
           var takenNames = data.names || [];
           form._takenNames = takenNames;
 
-          // Disable taken emojis
           var firstAvailable = null;
           form.querySelectorAll(".kviz-emoji-btn").forEach(function (btn) {
             var emoji = btn.getAttribute("data-emoji");
@@ -230,7 +239,6 @@
             }
           });
 
-          // Auto-select first available
           if (firstAvailable) {
             firstAvailable.classList.add("kviz-emoji-btn--selected");
             form.querySelector(".kviz-icon-input").value = firstAvailable.getAttribute("data-emoji");
@@ -249,7 +257,7 @@
         var row = document.createElement("div");
         row.className = "kviz-member-row";
         row.innerHTML =
-          '<input type="text" class="kviz-input kviz-member-input" placeholder="Jméno soutěžícího ' + (count + 1) + '">' +
+          '<input type="text" class="kviz-input kviz-member-input" placeholder="' + esc(tt("kviz.form.member_placeholder")) + " " + (count + 1) + '">' +
           '<button type="button" class="kviz-remove-member">\u00d7</button>';
         membersDiv.appendChild(row);
         row.querySelector(".kviz-remove-member").addEventListener("click", function () {
@@ -277,7 +285,7 @@
   function updateMemberPlaceholders(form) {
     var rows = form.querySelectorAll(".kviz-member-row");
     rows.forEach(function (row, i) {
-      row.querySelector(".kviz-member-input").placeholder = "Jméno soutěžícího " + (i + 1);
+      row.querySelector(".kviz-member-input").placeholder = tt("kviz.form.member_placeholder") + " " + (i + 1);
     });
   }
 
@@ -296,34 +304,34 @@
     var errDiv = form.querySelector(".kviz-form-error");
 
     if (!teamName) {
-      showError(errDiv, "Vyplňte jméno týmu.");
+      showError(errDiv, tt("kviz.form.err_team_name"));
       return;
     }
     var takenNames = form._takenNames || [];
     if (takenNames.indexOf(teamName) !== -1) {
-      showError(errDiv, "Tým s tímto názvem je již registrován. Zvol jiný název.");
+      showError(errDiv, tt("kviz.form.err_team_taken"));
       return;
     }
     if (!icon) {
-      showError(errDiv, "Vyber ikonu týmu.");
+      showError(errDiv, tt("kviz.form.err_icon"));
       return;
     }
     if (!email) {
-      showError(errDiv, "Vyplňte e-mail.");
+      showError(errDiv, tt("kviz.form.err_email"));
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showError(errDiv, "Zadejte platnou e-mailovou adresu.");
+      showError(errDiv, tt("kviz.form.err_email_invalid"));
       return;
     }
     if (members.length < 1) {
-      showError(errDiv, "Vyplňte alespoň jednoho člena.");
+      showError(errDiv, tt("kviz.form.err_members"));
       return;
     }
 
     var submitBtn = form.querySelector(".kviz-submit-btn");
     submitBtn.disabled = true;
-    submitBtn.textContent = "Odesílám…";
+    submitBtn.textContent = tt("kviz.form.submitting");
     errDiv.style.display = "none";
 
     try {
@@ -332,7 +340,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           team_name: teamName,
-          icon: icon || "🧠",
+          icon: icon || "\u{1F9E0}",
           email: email,
           members: members,
         }),
@@ -340,7 +348,7 @@
 
       if (!res.ok) {
         var data = await res.json();
-        throw new Error(data.error || "Registrace se nezdařila.");
+        throw new Error(data.error || tt("kviz.load_error"));
       }
 
       // Build payment QR code
@@ -354,19 +362,19 @@
       // Replace form with success + payment info
       form.innerHTML =
         '<div class="kviz-success">' +
-          '<span class="kviz-success-icon">✓</span>' +
-          '<strong>Registrace vytvořena!</strong>' +
-          '<p class="kviz-success-notice">⚠ Registrace bude potvrzena zaplacením poplatku ⚠</p>' +
-          '<p class="kviz-success-subtitle">Uhradit můžeš hotově na baru nebo převodem pomocí následujícího QR kódu:</p>' +
+          '<span class="kviz-success-icon">\u2713</span>' +
+          '<strong>' + esc(tt("kviz.success.title")) + '</strong>' +
+          '<p class="kviz-success-notice">' + esc(tt("kviz.success.notice")) + '</p>' +
+          '<p class="kviz-success-subtitle">' + esc(tt("kviz.success.subtitle")) + '</p>' +
           '<div class="kviz-qr">' + qrSvg + '</div>' +
-          '<div class="kviz-warning">Zaplať co nejdříve, aby ti někdo místo nevyfoukl!</div>' +
-          '<p style="color:var(--muted);font-size:.85rem;margin-top:1rem;">Na <strong style="color:#fff;">' + esc(email) + '</strong> jsme poslali potvrzující email.</p>' +
+          '<div class="kviz-warning">' + esc(tt("kviz.success.warning")) + '</div>' +
+          '<p style="color:var(--muted);font-size:.85rem;margin-top:1rem;">Na <strong style="color:#fff;">' + esc(email) + '</strong> ' + esc(tt("kviz.success.email_sent")) + '</p>' +
         "</div>";
 
       openFormQuizId = null;
     } catch (e) {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Registrovat";
+      submitBtn.textContent = tt("kviz.form.submit");
       showError(errDiv, e.message);
     }
   }
@@ -386,11 +394,11 @@
       var teams = await res.json();
 
       if (!teams.length) {
-        wrap.innerHTML = '<p style="color:var(--muted);padding:1rem;">Žádné výsledky.</p>';
+        wrap.innerHTML = '<p style="color:var(--muted);padding:1rem;">' + esc(tt("kviz.no_results")) + '</p>';
         return;
       }
 
-      var medals = ["🥇", "🥈", "🥉"];
+      var medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
       var medalClasses = ["kviz-result--gold", "kviz-result--silver", "kviz-result--bronze"];
 
       var html = '<div class="kviz-results-list">';
@@ -403,13 +411,13 @@
             '<span class="kviz-result-medal">' + medal + '</span>' +
             '<span class="kviz-result-icon">' + esc(t.icon) + '</span>' +
             '<span class="kviz-result-name">' + esc(t.team_name) + '</span>' +
-            (t.score != null ? '<span class="kviz-result-score">' + esc(String(t.score)) + ' b.</span>' : '') +
+            (t.score != null ? '<span class="kviz-result-score">' + esc(String(t.score)) + ' ' + esc(tt("kviz.score_suffix")) + '</span>' : '') +
           '</div>';
       });
       html += '</div>';
       wrap.innerHTML = html;
     } catch (e) {
-      wrap.innerHTML = '<p style="color:var(--muted);padding:1rem;">Výsledky se nepodařilo načíst.</p>';
+      wrap.innerHTML = '<p style="color:var(--muted);padding:1rem;">' + esc(tt("kviz.results_error")) + '</p>';
     }
   }
 

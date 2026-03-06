@@ -27,20 +27,21 @@ const defaultError = {
   sub: "Zkus to znovu nebo se vrať na hlavní stránku.",
 };
 
-export function errorPage(status: number): string {
+export function errorPage(status: number, langPrefix = ""): string {
   const e = errorContent[status] ?? defaultError;
   return pageShell({
     title: `${status} – SPiRiT Teplice`,
     description: e.title,
     canonical: "https://spirit-bar.cz",
     activePage: "",
+    langPrefix,
     slot: `
 <section class="error-page">
   <div class="error-code">${status}</div>
   <div class="error-icon">${e.icon}</div>
   <h1 class="error-title">${e.title}</h1>
   <p class="error-sub">${e.sub}</p>
-  <a href="/" class="btn btn-primary" style="margin-top:1.5rem">Zpět na hlavní stránku</a>
+  <a href="${langPrefix || "/"}" class="btn btn-primary" style="margin-top:1.5rem">Zpět na hlavní stránku</a>
 </section>`,
   });
 }
@@ -55,6 +56,8 @@ interface PageOptions {
   slot: string;
   /** Page-specific <script src="…"> tags (e.g. '/galerie.js') */
   scripts?: string[];
+  /** Language prefix for nav links (e.g. '/en', '/de') */
+  langPrefix?: string;
 }
 
 const navLinks: { href: string; label: string }[] = [
@@ -69,11 +72,22 @@ const navLinks: { href: string; label: string }[] = [
   { href: "/kviz", label: "Kvíz" },
 ];
 
+function prefixHref(href: string, prefix: string): string {
+  if (!prefix) return href;
+  // /#about → /en#about (no slash before #, so browser path stays /en)
+  if (href.startsWith("/#")) return prefix + "#" + href.slice(2);
+  if (href.startsWith("/")) return prefix + href;
+  return href;
+}
+
 export function pageShell(opts: PageOptions): string {
+  const lp = opts.langPrefix ?? "";
   const navItems = navLinks
     .map(
-      (l) =>
-        `<li><a href="${l.href}"${l.href === opts.activePage ? ' class="active"' : ""}>${l.label}</a></li>`
+      (l) => {
+        const href = prefixHref(l.href, lp);
+        return `<li><a href="${href}"${l.href === opts.activePage ? ' class="active"' : ""}>${l.label}</a></li>`;
+      }
     )
     .join("\n      ");
 
@@ -103,17 +117,19 @@ export function pageShell(opts: PageOptions): string {
 
   <!-- Styles -->
   <link rel="stylesheet" href="/style.css" />
+  <script src="/i18n.js" defer></script>
 </head>
 <body>
 
 <!-- NAV -->
 <nav id="navbar">
-  <a href="/" class="nav-logo">
+  <a href="${lp ? lp : "/"}" class="nav-logo">
     <img src="/img/logo/logo_white_png.png" alt="SPiRiT" />
   </a>
   <ul class="nav-links" id="navLinks">
       ${navItems}
-    <li><button id="themeToggle" class="theme-toggle" aria-label="Přepnout motiv">🌙</button></li>
+    <li id="langPicker" class="lang-picker"></li>
+    <li><button id="themeToggle" class="theme-toggle" aria-label="Přepnout motiv"><span class="theme-toggle-icon">🌙</span><span class="theme-toggle-label">Světlý motiv</span></button></li>
   </ul>
   <button class="hamburger" id="hamburger" aria-label="Menu">
     <span></span><span></span><span></span>
