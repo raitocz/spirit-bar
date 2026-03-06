@@ -1561,6 +1561,8 @@ footer {
     display: none;
     position: fixed;
     top: 65px; left: 0; right: 0;
+    max-height: calc(100dvh - 65px);
+    overflow-y: auto;
     background: rgba(2,4,8,.97);
     flex-direction: column;
     padding: 2rem;
