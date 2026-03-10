@@ -6,17 +6,21 @@ const ADMIN_USER = "testadmin";
 const ADMIN_PASS = "testpassword123";
 
 describe("Dungeon (Admin) API", () => {
-  let cookie: string;
+  let token: string;
 
   beforeAll(async () => {
     // Create admin user with hashed password
     const hash = await hashPassword(ADMIN_PASS);
     await env.DB.prepare(
-      "INSERT INTO admins (username, password_hash) VALUES (?, ?)"
+      "INSERT INTO admins (username, password_hash, role) VALUES (?, ?, 'admin')"
     )
       .bind(ADMIN_USER, hash)
       .run();
   });
+
+  function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    return { Authorization: "Bearer " + token, ...extra };
+  }
 
   // ── Auth ──
 
@@ -29,7 +33,7 @@ describe("Dungeon (Admin) API", () => {
     expect(res.status).toBe(401);
   });
 
-  it("POST /dungeon/api/login → 200 with correct credentials", async () => {
+  it("POST /dungeon/api/login → 200 with correct credentials + returns token", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -38,21 +42,18 @@ describe("Dungeon (Admin) API", () => {
     expect(res.status).toBe(200);
     const body: any = await res.json();
     expect(body.username).toBe(ADMIN_USER);
-
-    // Extract cookie for subsequent requests
-    const setCookie = res.headers.get("set-cookie") || "";
-    expect(setCookie).toContain("dungeon_token=");
-    cookie = setCookie.split(";")[0]; // "dungeon_token=..."
+    expect(body.token).toBeTruthy();
+    token = body.token;
   });
 
-  it("GET /dungeon/api/me → 401 without cookie", async () => {
+  it("GET /dungeon/api/me → 401 without token", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/me");
     expect(res.status).toBe(401);
   });
 
-  it("GET /dungeon/api/me → 200 with cookie", async () => {
+  it("GET /dungeon/api/me → 200 with Bearer token", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/me", {
-      headers: { Cookie: cookie },
+      headers: authHeaders(),
     });
     expect(res.status).toBe(200);
     const body: any = await res.json();
@@ -66,7 +67,7 @@ describe("Dungeon (Admin) API", () => {
   it("POST /dungeon/api/galleries → 201 creates gallery", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/galleries", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookie },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         title: "Admin Gallery",
         description: "Test desc",
@@ -81,7 +82,7 @@ describe("Dungeon (Admin) API", () => {
 
   it("GET /dungeon/api/galleries → lists galleries", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/galleries", {
-      headers: { Cookie: cookie },
+      headers: authHeaders(),
     });
     expect(res.status).toBe(200);
     const data: any = await res.json();
@@ -94,7 +95,7 @@ describe("Dungeon (Admin) API", () => {
       `http://localhost/dungeon/api/galleries/${galleryId}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Cookie: cookie },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           title: "Updated Gallery",
           description: "Updated",
@@ -112,7 +113,7 @@ describe("Dungeon (Admin) API", () => {
       `http://localhost/dungeon/api/galleries/${galleryId}`,
       {
         method: "DELETE",
-        headers: { Cookie: cookie },
+        headers: authHeaders(),
       }
     );
     expect(res.status).toBe(200);
@@ -126,7 +127,7 @@ describe("Dungeon (Admin) API", () => {
   it("POST /dungeon/api/quizzes → 201 creates quiz", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/quizzes", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookie },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         quiz_number: 50,
         date: "2025-01-15",
@@ -142,7 +143,7 @@ describe("Dungeon (Admin) API", () => {
 
   it("GET /dungeon/api/quizzes → lists quizzes", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/quizzes", {
-      headers: { Cookie: cookie },
+      headers: authHeaders(),
     });
     expect(res.status).toBe(200);
     const data: any = await res.json();
@@ -155,7 +156,7 @@ describe("Dungeon (Admin) API", () => {
       `http://localhost/dungeon/api/quizzes/${quizId}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Cookie: cookie },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           quiz_number: 51,
           date: "2025-01-20",
@@ -176,7 +177,7 @@ describe("Dungeon (Admin) API", () => {
     const team = await env.DB.prepare(
       "INSERT INTO quiz_teams (quiz_id, team_name, icon, email, payment_status) VALUES (?, ?, ?, ?, ?)"
     )
-      .bind(quizId, "Winners", "🏆", "win@test.cz", "cash")
+      .bind(quizId, "Winners", "\uD83C\uDFC6", "win@test.cz", "cash")
       .run();
     const teamId = team.meta.last_row_id;
 
@@ -184,7 +185,7 @@ describe("Dungeon (Admin) API", () => {
       `http://localhost/dungeon/api/quizzes/${quizId}/results`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Cookie: cookie },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           teams: [{ id: teamId, placement: 1, score: 42 }],
         }),
@@ -208,7 +209,7 @@ describe("Dungeon (Admin) API", () => {
       `http://localhost/dungeon/api/quizzes/${quizId}`,
       {
         method: "DELETE",
-        headers: { Cookie: cookie },
+        headers: authHeaders(),
       }
     );
     expect(res.status).toBe(200);
@@ -217,7 +218,7 @@ describe("Dungeon (Admin) API", () => {
 
   // ── Auth protection ──
 
-  it("POST /dungeon/api/galleries → 401 without cookie", async () => {
+  it("POST /dungeon/api/galleries → 401 without token", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/galleries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

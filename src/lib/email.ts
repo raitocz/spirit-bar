@@ -218,6 +218,50 @@ https://spirit-bar.cz`;
   return { to: email, subject: `Účast potvrzena – Kvíz #${quizNumber}`, html, text };
 }
 
+export function adminInviteEmail(opts: { username: string; email: string; role: string; setupUrl: string }): EmailMessage {
+  const { username, email, role, setupUrl } = opts;
+
+  const roleLabel = role === "admin" ? "Admin" : role === "quizmaster" ? "Quizmaster" : "Staff";
+
+  const html = emailLayout(`
+      <h1 style="margin:0 0 24px;font-size:28px;text-align:center;color:#fff;">Vítej v Dungeonu!</h1>
+      <p style="margin:0 0 20px;font-size:16px;color:#ccc;text-align:center;">Byl/a jsi pozván/a do administrace SPiRiT.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;width:120px;">Uživatel</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;font-weight:600;">${escapeHtml(username)}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;">Role</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;">${escapeHtml(roleLabel)}</td>
+        </tr>
+      </table>
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${escapeHtml(setupUrl)}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#2635d4,#00cfff);color:#fff;text-decoration:none;border-radius:100px;font-weight:600;font-size:16px;letter-spacing:.04em;">Nastavit heslo</a>
+      </div>
+      <p style="margin:0;font-size:13px;color:#666;text-align:center;">Odkaz je platný 24 hodin. Pokud jsi o přístup nežádal/a, tento email ignoruj.</p>
+  `);
+
+  const text = `Vítej v Dungeonu!
+
+Byl/a jsi pozván/a do administrace SPiRiT.
+
+Uživatel: ${username}
+Role: ${roleLabel}
+
+Nastav si heslo na: ${setupUrl}
+
+Odkaz je platný 24 hodin.
+
+---
+SPiRiT – Bar, Hookah Lounge & Coffee
+Školní 605/18, 415 01 Teplice
++420 731 829 346
+https://spirit-bar.cz`;
+
+  return { to: email, subject: "Pozvánka do SPiRiT Dungeon – nastav si heslo", html, text };
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
