@@ -17,6 +17,30 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// ── Security headers ──
+app.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set("X-Frame-Options", "DENY");
+  c.res.headers.set("X-Content-Type-Options", "nosniff");
+  c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+
+  // Dungeon setup-password has inline scripts; use 'unsafe-inline' fallback there
+  const isDungeonSetup = c.req.path === "/dungeon/setup-password";
+  const scriptSrc = isDungeonSetup
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' https://unpkg.com/leaflet@1.9.4/";
+  c.res.headers.set("Content-Security-Policy",
+    "default-src 'self'; " +
+    scriptSrc + "; " +
+    "style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/ https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.tile.openstreetmap.org; " +
+    "connect-src 'self'; " +
+    "frame-ancestors 'none';"
+  );
+});
+
 app.use(
   "/api/*",
   cors({
