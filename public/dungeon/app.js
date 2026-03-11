@@ -448,6 +448,9 @@
           </div>
           <ul class="sidebar-nav">${navItems}</ul>
           <div class="sidebar-bottom">
+            <a href="/" class="sidebar-frontend-link">
+              <span class="nav-icon">\uD83C\uDF10</span>Frontend
+            </a>
             <a href="#" id="logout-btn">
               <span class="nav-icon">\uD83D\uDEAA</span>Odhlásit se
             </a>

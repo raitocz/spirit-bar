@@ -227,3 +227,30 @@ document.querySelectorAll('section[id]').forEach(s => spyObs.observe(s));
       { className: 'spirit-popup' }
     );
 })();
+
+/* ── Hero background video (lazy, non-blocking) ── */
+(function () {
+  var video = document.getElementById('heroVideo');
+  if (!video) return;
+
+  /* Skip only on data-saver or extremely slow connections */
+  var conn = navigator.connection || navigator.mozConnection;
+  if (conn && conn.saveData) return;
+
+  function loadVideo() {
+    video.src = 'img/video/hero-normal.mp4';
+    video.addEventListener('canplaythrough', function () {
+      video.play();
+      video.classList.add('active');
+      video.parentElement.classList.add('video-active');
+    }, { once: true });
+    video.load();
+  }
+
+  /* Wait until page is fully loaded, then defer further to avoid contention */
+  if (document.readyState === 'complete') {
+    setTimeout(loadVideo, 200);
+  } else {
+    window.addEventListener('load', function () { setTimeout(loadVideo, 200); }, { once: true });
+  }
+})();

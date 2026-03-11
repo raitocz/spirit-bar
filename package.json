@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler d1 migrations apply spirit-bar-db --remote && wrangler deploy",
     "test": "vitest run"
   },
   "dependencies": {
