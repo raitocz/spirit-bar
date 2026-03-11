@@ -30,7 +30,13 @@
     const toast = document.createElement("div");
     toast.className = "toast toast--" + type;
     const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "toast-icon";
+    iconSpan.textContent = icon;
+    const msgSpan = document.createElement("span");
+    msgSpan.textContent = message;
+    toast.appendChild(iconSpan);
+    toast.appendChild(msgSpan);
     let container = document.getElementById("toast-container");
     if (!container) {
       container = document.createElement("div");
@@ -51,15 +57,28 @@
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.className = "modal-overlay";
-      overlay.innerHTML = `
-        <div class="modal">
-          <h3>${title}</h3>
-          <p>${message}</p>
-          <div class="modal-btns">
-            <button class="btn-secondary" data-action="cancel">Zrušit</button>
-            <button class="btn-primary" data-action="ok">Potvrdit</button>
-          </div>
-        </div>`;
+      const modal = document.createElement("div");
+      modal.className = "modal";
+      const h3 = document.createElement("h3");
+      h3.textContent = title;
+      const p = document.createElement("p");
+      p.innerHTML = message; // callers must escape user data with esc()
+      const btns = document.createElement("div");
+      btns.className = "modal-btns";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn-secondary";
+      cancelBtn.dataset.action = "cancel";
+      cancelBtn.textContent = "Zrušit";
+      const okBtn = document.createElement("button");
+      okBtn.className = "btn-primary";
+      okBtn.dataset.action = "ok";
+      okBtn.textContent = "Potvrdit";
+      btns.appendChild(cancelBtn);
+      btns.appendChild(okBtn);
+      modal.appendChild(h3);
+      modal.appendChild(p);
+      modal.appendChild(btns);
+      overlay.appendChild(modal);
       document.body.appendChild(overlay);
       function close(result) {
         overlay.remove();
@@ -440,7 +459,7 @@
               <span></span><span></span><span></span>
             </button>
             <h1 id="page-title">${pages[currentPage].label}</h1>
-            <span class="main-user"><span class="role-badge role-badge--${currentRole}">${currentRole}</span> ${currentUser}</span>
+            <span class="main-user"><span class="role-badge role-badge--${esc(currentRole)}">${esc(currentRole)}</span> ${esc(currentUser)}</span>
           </div>
           <div class="main-content" id="page-content"></div>
         </main>
@@ -526,6 +545,8 @@
     container.innerHTML = `
       <div class="gallery-toolbar">
         <button class="btn-primary" id="gallery-add-btn">+ Přidat galerii</button>
+        <button class="btn-secondary" id="regen-all-thumbs-btn">Přegenerovat všechny náhledy</button>
+        <span id="regen-all-status" style="margin-left:0.5rem;color:var(--muted);font-size:0.85rem;"></span>
       </div>
       <div id="gallery-form-wrap"></div>
       <div class="gallery-list" id="gallery-list">
@@ -537,6 +558,7 @@
       editingGalleryId = null;
       showGalleryForm();
     });
+    document.getElementById("regen-all-thumbs-btn").addEventListener("click", regenerateAllThumbnails);
 
     loadGalleries().then(renderGalleryList).catch(() => {
       document.getElementById("gallery-list").innerHTML =
@@ -722,6 +744,7 @@
       </div>
       <div class="upload-area" id="upload-area">
         <button class="btn-primary" id="photo-upload-btn">Nahrát fotky</button>
+        <button class="btn-secondary" id="regen-thumbs-btn">Přegenerovat náhledy</button>
         <input type="file" id="photo-file-input" multiple accept="image/*" hidden>
         <div class="upload-status" id="upload-status"></div>
       </div>
@@ -740,6 +763,7 @@
       fileInput.click();
     });
     fileInput.addEventListener("change", handlePhotoUpload);
+    document.getElementById("regen-thumbs-btn").addEventListener("click", regenerateThumbnails);
 
     loadAndRenderPhotos();
   }
@@ -862,9 +886,15 @@
         formData.append("width", resized.width);
         formData.append("height", resized.height);
 
+        // Generate thumbnails client-side
+        const thumbBlob = await generateThumb(resized.blob, 800, 0.82);
+        formData.append("thumb", thumbBlob, "thumb.webp");
+        const coverThumbBlob = await generateThumb(resized.blob, 350, 0.82);
+        formData.append("cover_thumb", coverThumbBlob, "cover.webp");
+
         const res = await fetch("/dungeon/api/galleries/" + currentGalleryId + "/photos", {
           method: "POST",
-          credentials: "same-origin",
+          headers: { "Authorization": "Bearer " + getToken() },
           body: formData,
         });
         if (!res.ok) {
@@ -887,7 +917,123 @@
     renderPhotoGrid();
   }
 
-  function resizeImage(file, maxW, maxH) {
+  async function regenerateThumbnails() {
+    if (!galleryPhotos.length) {
+      showToast("Žádné fotky k přegenerování", "info");
+      return;
+    }
+    const btn = document.getElementById("regen-thumbs-btn");
+    const status = document.getElementById("upload-status");
+    btn.disabled = true;
+
+    let done = 0;
+    let errors = 0;
+    for (const photo of galleryPhotos) {
+      done++;
+      status.textContent = `Generování náhledů ${done} / ${galleryPhotos.length}…`;
+      try {
+        // Fetch full-res image from R2
+        const imgSrc = "/dungeon/photos/" + photo.r2_key;
+        const thumbBlob = await generateThumb(imgSrc, 800, 0.82);
+        const coverThumbBlob = await generateThumb(imgSrc, 350, 0.82);
+
+        const formData = new FormData();
+        formData.append("thumb", thumbBlob, "thumb.webp");
+        formData.append("cover_thumb", coverThumbBlob, "cover.webp");
+
+        const res = await fetch("/dungeon/api/galleries/" + currentGalleryId + "/photos/" + photo.id + "/thumbs", {
+          method: "PUT",
+          headers: { "Authorization": "Bearer " + getToken() },
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Failed");
+      } catch {
+        errors++;
+      }
+    }
+
+    status.textContent = "";
+    btn.disabled = false;
+    if (errors) {
+      showToast(`Hotovo (${errors} chyb)`, "error");
+    } else {
+      showToast(`Náhledy přegenerovány (${galleryPhotos.length} fotek)`, "success");
+    }
+    // Reload photos to get updated thumb keys
+    loadAndRenderPhotos();
+  }
+
+  async function regenerateAllThumbnails() {
+    const btn = document.getElementById("regen-all-thumbs-btn");
+    const status = document.getElementById("regen-all-status");
+    btn.disabled = true;
+
+    try {
+      const allGalleries = await api("GET", "/galleries");
+      if (!allGalleries.length) {
+        showToast("Žádné galerie", "info");
+        btn.disabled = false;
+        return;
+      }
+
+      let totalPhotos = 0;
+      let done = 0;
+      let errors = 0;
+
+      // Collect all photos from all galleries
+      const galleryPhotosAll = [];
+      for (const g of allGalleries) {
+        status.textContent = `Načítání galerie „${g.title}"…`;
+        const photos = await api("GET", "/galleries/" + g.id + "/photos");
+        photos.forEach((p) => galleryPhotosAll.push({ galleryId: g.id, photo: p }));
+      }
+
+      totalPhotos = galleryPhotosAll.length;
+      if (!totalPhotos) {
+        showToast("Žádné fotky k přegenerování", "info");
+        status.textContent = "";
+        btn.disabled = false;
+        return;
+      }
+
+      for (const { galleryId, photo } of galleryPhotosAll) {
+        done++;
+        status.textContent = `Generování náhledů ${done} / ${totalPhotos}…`;
+        try {
+          const imgSrc = "/dungeon/photos/" + photo.r2_key;
+          const thumbBlob = await generateThumb(imgSrc, 800, 0.82);
+          const coverThumbBlob = await generateThumb(imgSrc, 350, 0.82);
+
+          const formData = new FormData();
+          formData.append("thumb", thumbBlob, "thumb.webp");
+          formData.append("cover_thumb", coverThumbBlob, "cover.webp");
+
+          const res = await fetch("/dungeon/api/galleries/" + galleryId + "/photos/" + photo.id + "/thumbs", {
+            method: "PUT",
+            headers: { "Authorization": "Bearer " + getToken() },
+            body: formData,
+          });
+          if (!res.ok) throw new Error("Failed");
+        } catch {
+          errors++;
+        }
+      }
+
+      status.textContent = "";
+      btn.disabled = false;
+      if (errors) {
+        showToast(`Hotovo: ${totalPhotos} fotek, ${errors} chyb`, "error");
+      } else {
+        showToast(`Všechny náhledy přegenerovány (${totalPhotos} fotek)`, "success");
+      }
+    } catch (err) {
+      status.textContent = "";
+      btn.disabled = false;
+      showToast("Chyba: " + err.message, "error");
+    }
+  }
+
+  function resizeImage(file, maxW, maxH, quality = 0.85) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -918,7 +1064,7 @@
             resolve({ blob, width: w, height: h });
           },
           "image/webp",
-          0.85
+          quality
         );
       };
       img.onerror = () => {
@@ -926,6 +1072,33 @@
         reject(new Error("Failed to load image"));
       };
       img.src = url;
+    });
+  }
+
+  // Generate thumbnail blob from an image source (URL or blob)
+  function generateThumb(src, maxW, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW) {
+          h = Math.round(h * (maxW / w));
+          w = maxW;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error("Thumb export failed")),
+          "image/webp",
+          quality
+        );
+      };
+      img.onerror = () => reject(new Error("Failed to load image for thumb"));
+      img.src = typeof src === "string" ? src : URL.createObjectURL(src);
     });
   }
 
@@ -2176,8 +2349,9 @@
   function openMailPopup(mail) {
     var w = window.open("", "_blank", "width=700,height=800");
     if (!w) return;
-    w.document.write(mail.html);
+    w.document.write('<html><head><title>Email preview</title></head><body style="margin:0;height:100vh"><iframe sandbox="allow-same-origin" style="width:100%;height:100%;border:none" srcdoc=""></iframe></body></html>');
     w.document.close();
+    w.document.querySelector("iframe").srcdoc = mail.html;
   }
 
   // ── Kvízy ──
@@ -2830,7 +3004,7 @@
     });
 
     loadUsers().then(() => renderUsersList()).catch((err) => {
-      document.getElementById("users-list").innerHTML = `<div class="placeholder-msg">Chyba: ${err.message}</div>`;
+      document.getElementById("users-list").innerHTML = `<div class="placeholder-msg">Chyba: ${esc(err.message)}</div>`;
     });
 
     if (showingUserForm) renderUserForm();
@@ -3076,7 +3250,7 @@
       btn.addEventListener("click", async () => {
         const userId = Number(btn.dataset.deleteUser);
         const user = adminUsers.find((u) => u.id === userId);
-        if (!await showConfirm("Smazat uživatele", `Opravdu smazat uživatele „${user?.username}"?`)) return;
+        if (!await showConfirm("Smazat uživatele", `Opravdu smazat uživatele &bdquo;${esc(user?.username || "")}&ldquo;?`)) return;
         try {
           await api("DELETE", "/users/" + userId);
           adminUsers = adminUsers.filter((u) => u.id !== userId);

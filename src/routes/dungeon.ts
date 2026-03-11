@@ -24,6 +24,25 @@ const USER_COLORS = [
   "#a3e635", "#fb923c", "#e879f9", "#2dd4bf",
 ];
 
+function isValidImageMagic(bytes: Uint8Array): boolean {
+  // WebP: RIFF....WEBP
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return true;
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return true;
+  // PNG: 89 50 4E 47
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return true;
+  // GIF: GIF87a or GIF89a
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return true;
+  return false;
+}
+
+async function hashInviteToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 function pickColor(usedColors: string[]): string {
   const used = new Set(usedColors.map(c => c?.toLowerCase()));
   for (const c of USER_COLORS) {
@@ -55,6 +74,8 @@ dungeon.get("/photos/:key{.+}", async (c) => {
 });
 
 // ── Login rate limiting ──
+// NOTE: In-memory rate limiting is per-isolate on Cloudflare Workers.
+// For production hardening, consider Cloudflare Rate Limiting API or KV-backed counters.
 
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -81,9 +102,20 @@ function clearLoginAttempts(ip: string): void {
   loginAttempts.delete(ip);
 }
 
+function cleanupRateLimits(): void {
+  const now = Date.now();
+  for (const [key, entry] of loginAttempts) {
+    if (now > entry.resetAt) loginAttempts.delete(key);
+  }
+  for (const [key, entry] of setupPasswordAttempts) {
+    if (now > entry.resetAt) setupPasswordAttempts.delete(key);
+  }
+}
+
 // ── API routes ──
 
 dungeon.post("/api/login", async (c) => {
+  cleanupRateLimits();
   const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
 
   if (isRateLimited(ip)) {
@@ -157,10 +189,11 @@ dungeon.post("/api/setup-password", async (c) => {
   if (!/[0-9]/.test(pw)) return c.json({ error: "password must contain a number" }, 400);
   if (!/[^a-zA-Z0-9]/.test(pw)) return c.json({ error: "password must contain a special character" }, 400);
 
+  const tokenHash = await hashInviteToken(body.token);
   const user = await c.env.DB.prepare(
     "SELECT id, username, role, invite_token, invite_expires FROM admins WHERE invite_token = ?"
   )
-    .bind(body.token)
+    .bind(tokenHash)
     .first<{ id: number; username: string; role: string; invite_token: string; invite_expires: string }>();
 
   if (!user) {
@@ -206,6 +239,14 @@ dungeon.use("/api/*", async (c, next) => {
   if (!token) return c.json({ error: "not authenticated" }, 401);
   const payload = await verifyJwt(token, c.env.JWT_SECRET);
   if (!payload) return c.json({ error: "invalid session" }, 401);
+
+  // Re-validate user exists and get current role from DB (prevents stale JWT role)
+  const dbUser = await c.env.DB.prepare("SELECT role FROM admins WHERE id = ? AND password_hash != 'invite_pending'")
+    .bind(payload.sub)
+    .first<{ role: string }>();
+  if (!dbUser) return c.json({ error: "user no longer exists" }, 401);
+  payload.role = dbUser.role;
+
   c.set("user" as never, payload);
   await next();
 });
@@ -323,15 +364,21 @@ dungeon.delete("/api/galleries/:id", async (c) => {
   if (denied) return denied;
   const id = Number(c.req.param("id"));
 
-  // Delete all R2 objects for this gallery
+  // Delete all R2 objects for this gallery (including thumbnails)
   const { results: photos } = await c.env.DB.prepare(
-    "SELECT r2_key FROM gallery_photos WHERE gallery_id = ?"
+    "SELECT r2_key, thumb_r2_key, cover_thumb_r2_key FROM gallery_photos WHERE gallery_id = ?"
   )
     .bind(id)
-    .all<{ r2_key: string }>();
+    .all<{ r2_key: string; thumb_r2_key: string | null; cover_thumb_r2_key: string | null }>();
 
   if (photos.length) {
-    await Promise.all(photos.map((p) => c.env.PHOTOS.delete(p.r2_key)));
+    const deletes = photos.flatMap((p) => {
+      const keys = [p.r2_key];
+      if (p.thumb_r2_key) keys.push(p.thumb_r2_key);
+      if (p.cover_thumb_r2_key) keys.push(p.cover_thumb_r2_key);
+      return keys;
+    });
+    await Promise.all(deletes.map((k) => c.env.PHOTOS.delete(k)));
   }
 
   const { meta } = await c.env.DB.prepare("DELETE FROM galleries WHERE id = ?")
@@ -387,18 +434,42 @@ dungeon.post("/api/galleries/:id/photos", async (c) => {
     return c.json({ error: "file too large (max 10 MB)" }, 413);
   }
 
-  const uuid = crypto.randomUUID();
-  const r2Key = `galleries/${galleryId}/${uuid}.webp`;
   const arrayBuffer = await file.arrayBuffer();
 
-  await c.env.PHOTOS.put(r2Key, arrayBuffer, {
-    httpMetadata: { contentType: "image/webp" },
-  });
+  // Validate actual file content via magic bytes (don't trust client-declared MIME type)
+  const magicBytes = new Uint8Array(arrayBuffer.slice(0, 12));
+  if (!isValidImageMagic(magicBytes)) {
+    return c.json({ error: "file content does not match an allowed image type" }, 400);
+  }
+
+  const uuid = crypto.randomUUID();
+  const r2Key = `galleries/${galleryId}/${uuid}.webp`;
+
+  // Handle optional thumbnails (client-generated)
+  const thumbFile = formData.get("thumb") as File | null;
+  const coverThumbFile = formData.get("cover_thumb") as File | null;
+  let thumbR2Key: string | null = null;
+  let coverThumbR2Key: string | null = null;
+
+  const uploads: Promise<any>[] = [
+    c.env.PHOTOS.put(r2Key, arrayBuffer, { httpMetadata: { contentType: "image/webp" } }),
+  ];
+
+  if (thumbFile) {
+    thumbR2Key = `galleries/${galleryId}/${uuid}_thumb.webp`;
+    uploads.push(c.env.PHOTOS.put(thumbR2Key, await thumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }));
+  }
+  if (coverThumbFile) {
+    coverThumbR2Key = `galleries/${galleryId}/${uuid}_cover.webp`;
+    uploads.push(c.env.PHOTOS.put(coverThumbR2Key, await coverThumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }));
+  }
+
+  await Promise.all(uploads);
 
   const result = await c.env.DB.prepare(
-    "INSERT INTO gallery_photos (gallery_id, filename, r2_key, width, height, size_bytes) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO gallery_photos (gallery_id, filename, r2_key, width, height, size_bytes, thumb_r2_key, cover_thumb_r2_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   )
-    .bind(galleryId, file.name || "photo.webp", r2Key, width, height, arrayBuffer.byteLength)
+    .bind(galleryId, file.name || "photo.webp", r2Key, width, height, arrayBuffer.byteLength, thumbR2Key, coverThumbR2Key)
     .run();
 
   const row = await c.env.DB.prepare(
@@ -439,17 +510,61 @@ dungeon.delete("/api/galleries/:id/photos/:photoId", async (c) => {
   const photoId = Number(c.req.param("photoId"));
 
   const photo = await c.env.DB.prepare(
+    "SELECT r2_key, thumb_r2_key, cover_thumb_r2_key FROM gallery_photos WHERE id = ? AND gallery_id = ?"
+  )
+    .bind(photoId, galleryId)
+    .first<{ r2_key: string; thumb_r2_key: string | null; cover_thumb_r2_key: string | null }>();
+
+  if (!photo) return c.json({ error: "not found" }, 404);
+
+  const deletes = [c.env.PHOTOS.delete(photo.r2_key)];
+  if (photo.thumb_r2_key) deletes.push(c.env.PHOTOS.delete(photo.thumb_r2_key));
+  if (photo.cover_thumb_r2_key) deletes.push(c.env.PHOTOS.delete(photo.cover_thumb_r2_key));
+  await Promise.all(deletes);
+
+  await c.env.DB.prepare("DELETE FROM gallery_photos WHERE id = ?")
+    .bind(photoId)
+    .run();
+
+  return c.json({ ok: true });
+});
+
+// Upload thumbnail for existing photo (backfill)
+dungeon.put("/api/galleries/:id/photos/:photoId/thumbs", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const galleryId = Number(c.req.param("id"));
+  const photoId = Number(c.req.param("photoId"));
+
+  const photo = await c.env.DB.prepare(
     "SELECT r2_key FROM gallery_photos WHERE id = ? AND gallery_id = ?"
   )
     .bind(photoId, galleryId)
     .first<{ r2_key: string }>();
-
   if (!photo) return c.json({ error: "not found" }, 404);
 
-  await c.env.PHOTOS.delete(photo.r2_key);
-  await c.env.DB.prepare("DELETE FROM gallery_photos WHERE id = ?")
-    .bind(photoId)
-    .run();
+  const formData = await c.req.formData();
+  const thumbFile = formData.get("thumb") as File | null;
+  const coverThumbFile = formData.get("cover_thumb") as File | null;
+
+  if (!thumbFile) return c.json({ error: "thumb is required" }, 400);
+
+  // Derive thumb keys from original r2_key
+  const base = photo.r2_key.replace(/\.webp$/, "");
+  const thumbR2Key = `${base}_thumb.webp`;
+  const coverThumbR2Key = coverThumbFile ? `${base}_cover.webp` : null;
+
+  const uploads: Promise<any>[] = [
+    c.env.PHOTOS.put(thumbR2Key, await thumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }),
+  ];
+  if (coverThumbFile && coverThumbR2Key) {
+    uploads.push(c.env.PHOTOS.put(coverThumbR2Key, await coverThumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }));
+  }
+  await Promise.all(uploads);
+
+  await c.env.DB.prepare(
+    "UPDATE gallery_photos SET thumb_r2_key = ?, cover_thumb_r2_key = ? WHERE id = ?"
+  ).bind(thumbR2Key, coverThumbR2Key, photoId).run();
 
   return c.json({ ok: true });
 });
@@ -484,6 +599,15 @@ dungeon.post("/api/quizzes", async (c) => {
   if (!body.quiz_number || !body.date?.trim() || !body.max_participants || body.price == null) {
     return c.json({ error: "quiz_number, date, max_participants, and price are required" }, 400);
   }
+  if (!Number.isInteger(body.quiz_number) || body.quiz_number < 1) {
+    return c.json({ error: "quiz_number must be a positive integer" }, 400);
+  }
+  if (!Number.isInteger(body.max_participants) || body.max_participants < 1) {
+    return c.json({ error: "max_participants must be a positive integer" }, 400);
+  }
+  if (!Number.isFinite(body.price) || body.price < 0) {
+    return c.json({ error: "price must be a non-negative number" }, 400);
+  }
   if (!isValidDate(body.date.trim())) {
     return c.json({ error: "date must be YYYY-MM-DD" }, 400);
   }
@@ -510,6 +634,15 @@ dungeon.put("/api/quizzes/:id", async (c) => {
   }>();
   if (!body.quiz_number || !body.date?.trim() || !body.max_participants || body.price == null) {
     return c.json({ error: "quiz_number, date, max_participants, and price are required" }, 400);
+  }
+  if (!Number.isInteger(body.quiz_number) || body.quiz_number < 1) {
+    return c.json({ error: "quiz_number must be a positive integer" }, 400);
+  }
+  if (!Number.isInteger(body.max_participants) || body.max_participants < 1) {
+    return c.json({ error: "max_participants must be a positive integer" }, 400);
+  }
+  if (!Number.isFinite(body.price) || body.price < 0) {
+    return c.json({ error: "price must be a non-negative number" }, 400);
   }
   if (!isValidDate(body.date.trim())) {
     return c.json({ error: "date must be YYYY-MM-DD" }, 400);
@@ -678,15 +811,17 @@ dungeon.get("/api/users", async (c) => {
     "SELECT id, username, email, role, staff_type, color, created_at, CASE WHEN password_hash = 'invite_pending' THEN 1 ELSE 0 END AS invite_pending FROM admins ORDER BY created_at"
   ).all();
 
-  // Backfill colors for users that don't have one yet
+  // Backfill colors for users that don't have one yet (batched)
   const usedColors = results.filter((u: any) => u.color).map((u: any) => u.color as string);
+  const colorUpdates: any[] = [];
   for (const u of results as any[]) {
     if (!u.color) {
       u.color = pickColor(usedColors);
       usedColors.push(u.color);
-      await c.env.DB.prepare("UPDATE admins SET color = ? WHERE id = ?").bind(u.color, u.id).run();
+      colorUpdates.push(c.env.DB.prepare("UPDATE admins SET color = ? WHERE id = ?").bind(u.color, u.id));
     }
   }
+  if (colorUpdates.length) await c.env.DB.batch(colorUpdates);
 
   return c.json(results);
 });
@@ -788,16 +923,17 @@ dungeon.post("/api/users", async (c) => {
   const { results: existingColors } = await c.env.DB.prepare("SELECT color FROM admins WHERE color IS NOT NULL").all();
   const color = pickColor(existingColors.map((r: any) => r.color));
 
-  // Generate secure invite token (32 random bytes → 64 hex chars)
+  // Generate secure invite token (32 random bytes → 64 hex chars), store hash in DB
   const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
   const inviteToken = [...tokenBytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const inviteTokenHash = await hashInviteToken(inviteToken);
   const inviteExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   // Insert user with placeholder password hash (cannot login until password is set)
   const result = await c.env.DB.prepare(
     "INSERT INTO admins (username, password_hash, role, staff_type, email, color, invite_token, invite_expires) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   )
-    .bind(username, "invite_pending", role, staffType, email, color, inviteToken, inviteExpires)
+    .bind(username, "invite_pending", role, staffType, email, color, inviteTokenHash, inviteExpires)
     .run();
 
   // Build setup URL
@@ -832,10 +968,11 @@ dungeon.post("/api/users/:id/reinvite", async (c) => {
 
   const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
   const inviteToken = [...tokenBytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const inviteTokenHash = await hashInviteToken(inviteToken);
   const inviteExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   await c.env.DB.prepare("UPDATE admins SET invite_token = ?, invite_expires = ? WHERE id = ?")
-    .bind(inviteToken, inviteExpires, id)
+    .bind(inviteTokenHash, inviteExpires, id)
     .run();
 
   const origin = new URL(c.req.url).origin;
@@ -861,6 +998,8 @@ dungeon.get("/api/mail", (c) => {
 });
 
 dungeon.delete("/api/mail", (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
   clearMailbox();
   return c.json({ ok: true });
 });
@@ -876,10 +1015,15 @@ dungeon.get("/api/settings", async (c) => {
   return c.json(settings);
 });
 
+const ALLOWED_SETTINGS_KEYS = ["hourly_wage"];
+
 dungeon.put("/api/settings/:key", async (c) => {
   const denied = requireRole(c, "admin");
   if (denied) return denied;
   const key = c.req.param("key");
+  if (!ALLOWED_SETTINGS_KEYS.includes(key)) {
+    return c.json({ error: "unknown setting key" }, 400);
+  }
   const body = await c.req.json<{ value?: string }>();
   if (body.value === undefined || body.value === null) {
     return c.json({ error: "value is required" }, 400);
@@ -1174,7 +1318,7 @@ function getDefaultShiftTimes(dow: number): { from: string; to: string } | null 
 }
 
 dungeon.get("/api/shift-logs/month/:year/:month", async (c) => {
-  const denied = requireRole(c, "staff");
+  const denied = requireRole(c, "admin", "staff");
   if (denied) return denied;
   const userId = (c.get as any)("user").sub;
   const year = Number(c.req.param("year"));
@@ -1185,20 +1329,18 @@ dungeon.get("/api/shift-logs/month/:year/:month", async (c) => {
 
   const prefix = `${year}-${String(month).padStart(2, "0")}-%`;
 
-  // Dates where user is assigned (hookah or bar)
-  const { results: shiftRows } = await c.env.DB.prepare(
-    "SELECT date FROM shifts WHERE date LIKE ? AND (hookah_user_id = ? OR bar_user_id = ?)"
-  ).bind(prefix, userId, userId).all();
-
-  // Dates where user is helper
-  const { results: helperRows } = await c.env.DB.prepare(
-    "SELECT date FROM shift_availability WHERE date LIKE ? AND user_id = ? AND status = 'helper'"
-  ).bind(prefix, userId).all();
-
-  // Dates where user already logged
-  const { results: logRows } = await c.env.DB.prepare(
-    "SELECT date FROM shift_logs WHERE date LIKE ? AND user_id = ?"
-  ).bind(prefix, userId).all();
+  // Parallel fetch: assigned shifts, helper availability, and logged shifts
+  const [{ results: shiftRows }, { results: helperRows }, { results: logRows }] = await Promise.all([
+    c.env.DB.prepare(
+      "SELECT date FROM shifts WHERE date LIKE ? AND (hookah_user_id = ? OR bar_user_id = ?)"
+    ).bind(prefix, userId, userId).all(),
+    c.env.DB.prepare(
+      "SELECT date FROM shift_availability WHERE date LIKE ? AND user_id = ? AND status = 'helper'"
+    ).bind(prefix, userId).all(),
+    c.env.DB.prepare(
+      "SELECT date FROM shift_logs WHERE date LIKE ? AND user_id = ?"
+    ).bind(prefix, userId).all(),
+  ]);
 
   const assigned = new Set<string>();
   for (const r of shiftRows as any[]) assigned.add(r.date);
@@ -1214,39 +1356,36 @@ dungeon.get("/api/shift-logs/month/:year/:month", async (c) => {
 });
 
 dungeon.get("/api/shift-logs/:date", async (c) => {
-  const denied = requireRole(c, "staff");
+  const denied = requireRole(c, "admin", "staff");
   if (denied) return denied;
   const date = c.req.param("date");
   if (!isValidDate(date)) return c.json({ error: "invalid date" }, 400);
 
   const userId = (c.get as any)("user").sub;
 
-  // Check if user is assigned (hookah, bar, or helper)
-  const shift = await c.env.DB.prepare(
-    "SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?"
-  ).bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
-
-  const helper = await c.env.DB.prepare(
-    "SELECT id FROM shift_availability WHERE date = ? AND user_id = ? AND status = 'helper'"
-  ).bind(date, userId).first();
+  // Parallel fetch: shift assignment, helper status, existing log
+  const [shift, helper, log] = await Promise.all([
+    c.env.DB.prepare(
+      "SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?"
+    ).bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>(),
+    c.env.DB.prepare(
+      "SELECT id FROM shift_availability WHERE date = ? AND user_id = ? AND status = 'helper'"
+    ).bind(date, userId).first(),
+    c.env.DB.prepare(
+      "SELECT time_from, time_to, note, created_at FROM shift_logs WHERE date = ? AND user_id = ?"
+    ).bind(date, userId).first<{ time_from: string; time_to: string; note: string; created_at: string }>(),
+  ]);
 
   let position: string | null = null;
   if (shift?.hookah_user_id === userId) position = "hookah";
   else if (shift?.bar_user_id === userId) position = "bar";
   else if (helper) position = "helper";
 
-  const assigned = position !== null;
-
-  // Get existing log
-  const log = await c.env.DB.prepare(
-    "SELECT time_from, time_to, note, created_at FROM shift_logs WHERE date = ? AND user_id = ?"
-  ).bind(date, userId).first<{ time_from: string; time_to: string; note: string; created_at: string }>();
-
-  return c.json({ assigned, position, log: log || null });
+  return c.json({ assigned: position !== null, position, log: log || null });
 });
 
 dungeon.post("/api/shift-logs", async (c) => {
-  const denied = requireRole(c, "staff");
+  const denied = requireRole(c, "admin", "staff");
   if (denied) return denied;
 
   const userId = (c.get as any)("user").sub;
@@ -1261,22 +1400,21 @@ dungeon.post("/api/shift-logs", async (c) => {
   const dow = new Date(body.date + "T00:00:00").getDay();
   if (dow === 1) return c.json({ error: "Monday is closed" }, 400);
 
-  // Check assignment
-  const shift = await c.env.DB.prepare(
-    "SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?"
-  ).bind(body.date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
-
-  const helper = await c.env.DB.prepare(
-    "SELECT id FROM shift_availability WHERE date = ? AND user_id = ? AND status = 'helper'"
-  ).bind(body.date, userId).first();
+  // Parallel check: assignment + duplicate log
+  const [shift, helper, existing] = await Promise.all([
+    c.env.DB.prepare(
+      "SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?"
+    ).bind(body.date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>(),
+    c.env.DB.prepare(
+      "SELECT id FROM shift_availability WHERE date = ? AND user_id = ? AND status = 'helper'"
+    ).bind(body.date, userId).first(),
+    c.env.DB.prepare(
+      "SELECT id FROM shift_logs WHERE date = ? AND user_id = ?"
+    ).bind(body.date, userId).first(),
+  ]);
 
   const isAssigned = (shift?.hookah_user_id === userId) || (shift?.bar_user_id === userId) || !!helper;
   if (!isAssigned) return c.json({ error: "not assigned to this day" }, 403);
-
-  // Check duplicate
-  const existing = await c.env.DB.prepare(
-    "SELECT id FROM shift_logs WHERE date = ? AND user_id = ?"
-  ).bind(body.date, userId).first();
   if (existing) return c.json({ error: "shift already logged for this day" }, 409);
 
   // Check if note required (times differ from default)

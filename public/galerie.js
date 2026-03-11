@@ -64,8 +64,9 @@
         html += '<div class="galerie-grid">';
 
         byYear[year].forEach(function (g) {
-          var cover = g.cover_r2_key
-            ? '<img src="' + photoUrl(g.cover_r2_key) + '" alt="' + escHtml(g.title) + '" loading="lazy" />'
+          var coverKey = g.cover_thumb_r2_key || g.cover_thumb_fallback || g.cover_r2_key;
+          var cover = coverKey
+            ? '<img src="' + photoUrl(coverKey) + '" alt="' + escHtml(g.title) + '" loading="lazy" />'
             : '<div class="galerie-card-placeholder"></div>';
 
           var dateLabel = formatDate(g.date_from);
@@ -135,10 +136,12 @@
       if (gallery.photos && gallery.photos.length) {
         html += '<div class="galerie-photo-grid">';
         gallery.photos.forEach(function (p) {
+          var thumbSrc = p.thumb_r2_key ? photoUrl(p.thumb_r2_key) : photoUrl(p.r2_key);
+          var fullSrc = photoUrl(p.r2_key);
           html +=
             '<div class="galerie-photo">' +
-            '<img src="' + photoUrl(p.r2_key) + '" alt="' + escHtml(gallery.title) +
-            '" loading="lazy" width="' + p.width + '" height="' + p.height + '" />' +
+            '<img src="' + thumbSrc + '" data-full="' + fullSrc + '" alt="' + escHtml(gallery.title) +
+            '" loading="lazy" />' +
             "</div>";
         });
         html += "</div>";
@@ -162,7 +165,7 @@
       // Lightbox
       app.querySelectorAll(".galerie-photo img").forEach(function (img) {
         img.addEventListener("click", function () {
-          openLightbox(img.src);
+          openLightbox(img.dataset.full || img.src);
         });
       });
     } catch (err) {

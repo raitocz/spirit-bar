@@ -10,6 +10,8 @@ type Bindings = {
 export const api = new Hono<{ Bindings: Bindings }>();
 
 // ── Rate limiting ──
+// NOTE: In-memory rate limiting is per-isolate on Cloudflare Workers.
+// For production hardening, consider Cloudflare Rate Limiting API or KV-backed counters.
 
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
 
@@ -19,8 +21,15 @@ function rateLimit(
   maxRequests: number,
   windowMs: number
 ): boolean {
-  const key = prefix + ":" + ip;
+  // Periodic cleanup of expired entries
   const now = Date.now();
+  if (rateLimits.size > 100) {
+    for (const [k, v] of rateLimits) {
+      if (now > v.resetAt) rateLimits.delete(k);
+    }
+  }
+
+  const key = prefix + ":" + ip;
   const entry = rateLimits.get(key);
   if (!entry || now > entry.resetAt) {
     rateLimits.set(key, { count: 1, resetAt: now + windowMs });
@@ -80,7 +89,8 @@ api.get("/quizzes", async (c) => {
      FROM quizzes q
      LEFT JOIN quiz_teams qt ON qt.quiz_id = q.id AND qt.payment_status IS NOT NULL
      GROUP BY q.id
-     ORDER BY q.date DESC`
+     ORDER BY q.date DESC
+     LIMIT 200`
   ).all();
   return c.json(results);
 });
@@ -174,13 +184,22 @@ api.post("/quizzes/:id/register", async (c) => {
     return c.json({ error: "Tato ikona je již zabraná, zvol jinou" }, 409);
   }
 
-  const teamResult = await c.env.DB.prepare(
-    "INSERT INTO quiz_teams (quiz_id, team_name, icon, email) VALUES (?, ?, ?, ?)"
-  )
-    .bind(quizId, trimmedName, icon, body.email.trim().toLowerCase())
-    .run();
+  let teamId: number;
+  try {
+    const teamResult = await c.env.DB.prepare(
+      "INSERT INTO quiz_teams (quiz_id, team_name, icon, email) VALUES (?, ?, ?, ?)"
+    )
+      .bind(quizId, trimmedName, icon, body.email.trim().toLowerCase())
+      .run();
+    teamId = teamResult.meta.last_row_id;
+  } catch (e: unknown) {
+    // Handle race condition: UNIQUE constraint violation despite earlier SELECT checks
+    if (e instanceof Error && e.message.includes("UNIQUE")) {
+      return c.json({ error: "Tým nebo ikona již existuje, zkus to znovu" }, 409);
+    }
+    throw e;
+  }
 
-  const teamId = teamResult.meta.last_row_id;
   const memberStmts = members.map((name) =>
     c.env.DB.prepare("INSERT INTO quiz_team_members (team_id, name) VALUES (?, ?)").bind(teamId, name)
   );
@@ -226,12 +245,14 @@ api.get("/quizzes/:id/results", async (c) => {
 
 api.get("/galleries", async (c) => {
   const { results: galleries } = await c.env.DB.prepare(
-    `SELECT g.*, gp.r2_key AS cover_r2_key, gp.width AS cover_width, gp.height AS cover_height
+    `SELECT g.*, gp.r2_key AS cover_r2_key, gp.width AS cover_width, gp.height AS cover_height,
+            gp.cover_thumb_r2_key, gp.thumb_r2_key AS cover_thumb_fallback
      FROM galleries g
      LEFT JOIN gallery_photos gp ON gp.id = (
        SELECT id FROM gallery_photos WHERE gallery_id = g.id ORDER BY sort_order, created_at LIMIT 1
      )
-     ORDER BY g.date_from DESC`
+     ORDER BY g.date_from DESC
+     LIMIT 200`
   ).all();
   return c.json(galleries);
 });
