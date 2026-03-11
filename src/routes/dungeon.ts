@@ -1281,6 +1281,15 @@ dungeon.put("/api/shifts/:date/availability", async (c) => {
     return c.json({ error: "forbidden" }, 403);
   }
 
+  // Check if user is already assigned to a shift (hookah/bar/helper) this day
+  const assignedShift = await c.env.DB.prepare("SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?").bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
+  const isOnShift = assignedShift && (assignedShift.hookah_user_id === body.user_id || assignedShift.bar_user_id === body.user_id);
+  const isHelper = await c.env.DB.prepare("SELECT id FROM shift_availability WHERE date = ? AND user_id = ? AND status = 'helper'").bind(date, body.user_id).first();
+
+  if (isOnShift || isHelper) {
+    return c.json({ error: "Tento člověk je na tento den již zapsaný na směně" }, 400);
+  }
+
   if (body.status === null || body.status === undefined) {
     // Remove availability
     await c.env.DB.prepare("DELETE FROM shift_availability WHERE date = ? AND user_id = ?")
@@ -1291,13 +1300,6 @@ dungeon.put("/api/shifts/:date/availability", async (c) => {
     }
     if (body.status === "helper" && dow !== 5 && dow !== 6) {
       return c.json({ error: "helper is only available on Friday and Saturday" }, 400);
-    }
-    // Check helper isn't already assigned as hookah or bar
-    if (body.status === "helper") {
-      const shift = await c.env.DB.prepare("SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?").bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
-      if (shift && (shift.hookah_user_id === body.user_id || shift.bar_user_id === body.user_id)) {
-        return c.json({ error: "Tento člověk je na tento den zapsaný na jinou pozici" }, 400);
-      }
     }
     await c.env.DB.prepare(
       `INSERT INTO shift_availability (date, user_id, status)
