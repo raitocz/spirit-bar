@@ -305,7 +305,7 @@ body.light .hero-logo-light { display: block; }
 
 /* ─────── SECTIONS ─────── */
 section { padding: 6rem 1.5rem; transition: background .4s ease; }
-.container { max-width: 1100px; margin: 0 auto; }
+.container { max-width: 1100px; margin: 0 auto; padding-inline: 1.5rem; }
 
 .section-label {
   font-size: .7rem;
@@ -674,13 +674,23 @@ section { padding: 6rem 1.5rem; transition: background .4s ease; }
 .galerie-card-img {
   aspect-ratio: 16/10;
   overflow: hidden;
+  background:
+    linear-gradient(90deg, var(--dark3) 25%, var(--dark4) 50%, var(--dark3) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 .galerie-card-img img {
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform .5s;
+  opacity: 0;
+  transition: opacity .5s ease, transform .5s;
 }
+.galerie-card-img img.loaded { opacity: 1; }
 .galerie-card:hover .galerie-card-img img { transform: scale(1.05); }
 .galerie-card-placeholder {
   width: 100%; height: 100%;
@@ -742,15 +752,21 @@ section { padding: 6rem 1.5rem; transition: background .4s ease; }
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid rgba(0,207,255,.08);
-  background: var(--dark3);
+  background:
+    linear-gradient(90deg, var(--dark3) 25%, var(--dark4) 50%, var(--dark3) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
   cursor: pointer;
   margin-bottom: 1rem;
+  min-height: 120px;
 }
 .galerie-photo img {
   width: 100%; height: auto;
   display: block;
-  transition: transform .4s;
+  opacity: 0;
+  transition: opacity .5s ease, transform .4s;
 }
+.galerie-photo img.loaded { opacity: 1; }
 .galerie-photo:hover img { transform: scale(1.04); }
 
 /* Lightbox */
@@ -778,6 +794,10 @@ body.light .galerie-card {
   border-color: rgba(38,53,212,.1);
   box-shadow: 0 2px 12px rgba(0,0,0,.06);
 }
+body.light .galerie-card-img {
+  background: linear-gradient(90deg, #e8ecf4 25%, #f0f4fa 50%, #e8ecf4 75%);
+  background-size: 200% 100%;
+}
 body.light .galerie-card:hover {
   border-color: rgba(38,53,212,.25);
   box-shadow: 0 12px 36px rgba(0,0,0,.1), 0 0 20px rgba(38,53,212,.06);
@@ -786,7 +806,8 @@ body.light .galerie-year { color: var(--blue); }
 body.light .galerie-back { color: var(--blue); }
 body.light .galerie-photo {
   border-color: rgba(38,53,212,.1);
-  background: #fff;
+  background: linear-gradient(90deg, #e8ecf4 25%, #f0f4fa 50%, #e8ecf4 75%);
+  background-size: 200% 100%;
 }
 
 /* "View galleries" button on main page */
@@ -1375,8 +1396,11 @@ body.light .kviz-success-icon {
   display: block;
 }
 /* Blue-ify only the tile layer – marker is unaffected */
-#spirit-map .leaflet-tile-pane {
-  filter: hue-rotate(195deg) saturate(2.2) brightness(1.5) contrast(1.1);
+#spirit-map .leaflet-base-pane {
+  filter: sepia(1) hue-rotate(180deg) saturate(3) brightness(2.4) contrast(1.1);
+}
+#spirit-map .leaflet-labels-pane {
+  filter: invert(1) brightness(1.1) sepia(0.15) hue-rotate(190deg) saturate(1.5);
 }
 /* Hide default Leaflet attribution branding */
 .leaflet-control-attribution { display: none; }
@@ -1574,7 +1598,7 @@ footer {
 /* ─────── RESPONSIVE ─────── */
 @media (max-width: 900px) {
   .about-grid,
-  .hours-wrap,
+  .hours-wrap { grid-template-columns: 1fr; gap: 3rem; }
   .contact-info { grid-template-columns: 1fr; gap: 1.5rem; }
   .about-img { order: -1; }
 }
@@ -1583,6 +1607,7 @@ footer {
     display: none;
     position: fixed;
     top: 65px; left: 0; right: 0;
+    z-index: 999;
     max-height: calc(100dvh - 65px);
     overflow-y: auto;
     background: rgba(2,4,8,.97);
@@ -1901,8 +1926,11 @@ body.light .carousel-thumb.active {
 
 /* Map */
 body.light #spirit-map { border-color: rgba(38,53,212,.12); }
-body.light #spirit-map .leaflet-tile-pane {
-  filter: hue-rotate(195deg) saturate(1.4) brightness(2.2) contrast(.85);
+body.light #spirit-map .leaflet-base-pane {
+  filter: sepia(0.15) hue-rotate(190deg) saturate(2);
+}
+body.light #spirit-map .leaflet-labels-pane {
+  filter: none;
 }
 body.light .leaflet-control-zoom a {
   background: rgba(255,255,255,.9) !important;
