@@ -55,6 +55,30 @@ app.use(
     },
   })
 );
+// Redirect legacy ?lang=XX query params to path-based language prefixes
+app.use("*", async (c, next) => {
+  const lang = c.req.query("lang");
+  if (lang) {
+    const url = new URL(c.req.url);
+    url.searchParams.delete("lang");
+    const normalizedLang = lang.toLowerCase();
+    if (normalizedLang === "cs") {
+      // Czech is default, just strip the param
+      return c.redirect(url.pathname + url.search, 301);
+    }
+    const supported = ["en", "de", "pl", "sigma"];
+    if (supported.includes(normalizedLang)) {
+      // Prepend language prefix to path
+      const path = url.pathname === "/" ? "" : url.pathname;
+      url.pathname = `/${normalizedLang}${path}`;
+      return c.redirect(url.pathname + url.search, 301);
+    }
+    // Unknown language – strip the param and continue
+    return c.redirect(url.pathname + url.search, 301);
+  }
+  return next();
+});
+
 app.route("/api", api);
 app.route("/dungeon", dungeon);
 

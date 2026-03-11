@@ -136,7 +136,8 @@ nav {
   overflow: hidden;
   z-index: 0;
 }
-.hero-bg img {
+.hero-bg img,
+.hero-bg video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -144,6 +145,18 @@ nav {
   transform: scale(1.06);
   opacity: .6;
   display: block;
+  transition: opacity 1.5s ease;
+}
+.hero-video {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+.hero-video.active {
+  opacity: .6;
+}
+.hero-bg.video-active img {
+  opacity: 0;
 }
 /* Dark gradient overlay on top of the photo */
 .hero-overlay {
