@@ -35,7 +35,7 @@ app.use("*", async (c, next) => {
     scriptSrc + "; " +
     "style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/ https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
-    "img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.tile.openstreetmap.org; " +
+    "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://*.tile.openstreetmap.org; " +
     "connect-src 'self'; " +
     "frame-ancestors 'none';"
   );

@@ -202,21 +202,46 @@ document.querySelectorAll('section[id]').forEach(s => spyObs.observe(s));
     scrollWheelZoom: false
   });
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd',
-    maxZoom: 20
-  }).addTo(map);
+  map.createPane('base');
+  map.getPane('base').style.zIndex = 200;
+  map.createPane('labels');
+  map.getPane('labels').style.zIndex = 300;
+
+  var darkBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 20, pane: 'base'
+  });
+  var darkLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 20, pane: 'labels'
+  });
+  var lightBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 20, pane: 'base'
+  });
+  var lightLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 20, pane: 'labels'
+  });
+
+  function applyMapTheme() {
+    var isLight = document.body.classList.contains('light');
+    if (isLight) {
+      map.removeLayer(darkBase); map.removeLayer(darkLabels);
+      lightBase.addTo(map); lightLabels.addTo(map);
+    } else {
+      map.removeLayer(lightBase); map.removeLayer(lightLabels);
+      darkBase.addTo(map); darkLabels.addTo(map);
+    }
+  }
+  applyMapTheme();
+  new MutationObserver(function () { applyMapTheme(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
   const pinIcon = L.divIcon({
     className: '',
     html: `<div class="spirit-pin">
              <div class="pin-head"></div>
              <div class="pin-stem"></div>
-             <div class="pin-label">SPiRiT</div>
            </div>`,
-    iconSize: [60, 68],
-    iconAnchor: [30, 54],
-    popupAnchor: [0, -56]
+    iconSize: [20, 34],
+    iconAnchor: [10, 34],
+    popupAnchor: [0, -36]
   });
 
   L.marker([LAT, LNG], { icon: pinIcon })

@@ -2,6 +2,16 @@
   var app = document.getElementById("galerie-app");
   var cache = {};
 
+  function fadeInImages(root) {
+    root.querySelectorAll("img").forEach(function (img) {
+      if (img.complete && img.naturalWidth) {
+        img.classList.add("loaded");
+      } else {
+        img.addEventListener("load", function () { img.classList.add("loaded"); }, { once: true });
+      }
+    });
+  }
+
   function tt(key) {
     return typeof t === "function" ? t(key) : key;
   }
@@ -87,6 +97,7 @@
 
       html += "</div>";
       app.innerHTML = html;
+      fadeInImages(app);
 
       // SPA click handler
       app.querySelectorAll(".galerie-card").forEach(function (card) {
@@ -151,6 +162,7 @@
 
       html += "</div>";
       app.innerHTML = html;
+      fadeInImages(app);
 
       // SPA back link
       var backLink = app.querySelector(".galerie-back");
