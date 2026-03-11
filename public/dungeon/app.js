@@ -2352,7 +2352,7 @@
   function openMailPopup(mail) {
     var w = window.open("", "_blank", "width=700,height=800");
     if (!w) return;
-    w.document.write('<html><head><title>Email preview</title></head><body style="margin:0;height:100vh"><iframe sandbox="allow-same-origin" style="width:100%;height:100%;border:none" srcdoc=""></iframe></body></html>');
+    w.document.write('<html><head><title>Email preview</title></head><body style="margin:0;height:100vh"><iframe sandbox="allow-same-origin allow-popups allow-top-navigation" style="width:100%;height:100%;border:none" srcdoc=""></iframe></body></html>');
     w.document.close();
     w.document.querySelector("iframe").srcdoc = mail.html;
   }

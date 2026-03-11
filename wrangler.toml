@@ -20,5 +20,4 @@ binding = "PHOTOS"
 bucket_name = "spirit-bar-photos"
 
 [vars]
-ENVIRONMENT = "development"
-# On production, override with: npx wrangler secret put ENVIRONMENT → "production"
+ENVIRONMENT = "production"
