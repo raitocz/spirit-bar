@@ -19,5 +19,8 @@ migrations_dir = "migrations"
 binding = "PHOTOS"
 bucket_name = "spirit-bar-photos"
 
+[triggers]
+crons = ["0 7 1 * *"]  # 1st of each month at 07:00 UTC (08:00 CET)
+
 [vars]
 ENVIRONMENT = "production"

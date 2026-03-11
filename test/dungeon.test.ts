@@ -6,7 +6,7 @@ const ADMIN_USER = "testadmin";
 const ADMIN_PASS = "testpassword123";
 
 describe("Dungeon (Admin) API", () => {
-  let token: string;
+  let sessionCookie: string;
 
   beforeAll(async () => {
     // Create admin user with hashed password
@@ -19,7 +19,7 @@ describe("Dungeon (Admin) API", () => {
   });
 
   function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-    return { Authorization: "Bearer " + token, ...extra };
+    return { Cookie: sessionCookie, ...extra };
   }
 
   // ── Auth ──
@@ -33,7 +33,7 @@ describe("Dungeon (Admin) API", () => {
     expect(res.status).toBe(401);
   });
 
-  it("POST /dungeon/api/login → 200 with correct credentials + returns token", async () => {
+  it("POST /dungeon/api/login → 200 with correct credentials + sets cookie", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,16 +42,20 @@ describe("Dungeon (Admin) API", () => {
     expect(res.status).toBe(200);
     const body: any = await res.json();
     expect(body.username).toBe(ADMIN_USER);
-    expect(body.token).toBeTruthy();
-    token = body.token;
+
+    // Extract session cookie from Set-Cookie header
+    const setCookie = res.headers.get("set-cookie") || "";
+    const match = setCookie.match(/session=([^\s;]+)/);
+    expect(match).toBeTruthy();
+    sessionCookie = `session=${match![1]}`;
   });
 
-  it("GET /dungeon/api/me → 401 without token", async () => {
+  it("GET /dungeon/api/me → 401 without cookie", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/me");
     expect(res.status).toBe(401);
   });
 
-  it("GET /dungeon/api/me → 200 with Bearer token", async () => {
+  it("GET /dungeon/api/me → 200 with session cookie", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/me", {
       headers: authHeaders(),
     });
@@ -218,7 +222,7 @@ describe("Dungeon (Admin) API", () => {
 
   // ── Auth protection ──
 
-  it("POST /dungeon/api/galleries → 401 without token", async () => {
+  it("POST /dungeon/api/galleries → 401 without cookie", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/galleries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -5,6 +5,7 @@ import { dungeon } from "./routes/dungeon";
 import { createGalerie } from "./routes/galerie";
 import { createKviz } from "./routes/kviz";
 import { errorPage } from "./lib/layout";
+import { sendEmail, monthlyShiftSummaryEmail } from "./lib/email";
 
 type Bindings = {
   DB: D1Database;
@@ -35,7 +36,7 @@ app.use("*", async (c, next) => {
     scriptSrc + "; " +
     "style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/ https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
-    "img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://*.tile.openstreetmap.org; " +
+    "img-src 'self' data: blob: https://spirit-bar.cz https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://*.tile.openstreetmap.org; " +
     "connect-src 'self'; " +
     "frame-ancestors 'none';"
   );
@@ -113,4 +114,94 @@ app.all("*", (c) => {
   return c.html(errorPage(404, lp), 404);
 });
 
-export default app;
+// ── Cron: monthly shift summary emails (1st of each month at 8:00 CET) ──
+
+const CZECH_MONTH_NAMES = [
+  "Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
+  "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec",
+];
+
+async function handleMonthlyShiftSummary(env: Bindings) {
+  // Previous month
+  const now = new Date();
+  const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth(); // 1-12
+  const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const prefix = `${prevYear}-${String(prevMonth).padStart(2, "0")}-%`;
+  const monthName = CZECH_MONTH_NAMES[prevMonth - 1];
+
+  // Get all staff/admin users with email
+  const { results: users } = await env.DB.prepare(
+    "SELECT id, username, email FROM admins WHERE role IN ('admin', 'staff') AND email IS NOT NULL AND password_hash != 'invite_pending'"
+  ).all<{ id: number; username: string; email: string }>();
+
+  if (!users.length) return;
+
+  // Get hourly wage
+  const wageRow = await env.DB.prepare("SELECT value FROM settings WHERE key = 'hourly_wage'").first<{ value: string }>();
+  const hourlyWage = wageRow ? Number(wageRow.value) : 0;
+
+  for (const user of users) {
+    // Get shifts where user was assigned
+    const [{ results: shiftRows }, { results: helperRows }, { results: logRows }] = await Promise.all([
+      env.DB.prepare(
+        "SELECT date FROM shifts WHERE date LIKE ? AND (hookah_user_id = ? OR bar_user_id = ?)"
+      ).bind(prefix, user.id, user.id).all<{ date: string }>(),
+      env.DB.prepare(
+        "SELECT date FROM shift_availability WHERE date LIKE ? AND user_id = ? AND status = 'helper'"
+      ).bind(prefix, user.id).all<{ date: string }>(),
+      env.DB.prepare(
+        "SELECT date, time_from, time_to FROM shift_logs WHERE date LIKE ? AND user_id = ?"
+      ).bind(prefix, user.id).all<{ date: string; time_from: string; time_to: string }>(),
+    ]);
+
+    // All assigned dates
+    const assignedDates = new Set<string>();
+    for (const r of shiftRows) assignedDates.add(r.date);
+    for (const r of helperRows) assignedDates.add(r.date);
+
+    if (assignedDates.size === 0) continue; // No shifts this month
+
+    // Logged dates
+    const loggedDates = new Set<string>();
+    let totalMinutes = 0;
+    for (const l of logRows) {
+      loggedDates.add(l.date);
+      const [fH, fM] = l.time_from.split(":").map(Number);
+      const [tH, tM] = l.time_to.split(":").map(Number);
+      let mins = (tH * 60 + tM) - (fH * 60 + fM);
+      if (mins <= 0) mins += 1440;
+      totalMinutes += mins;
+    }
+
+    // Unlogged dates
+    const unloggedDates = [...assignedDates].filter(d => !loggedDates.has(d)).sort();
+
+    const totalHours = Math.round(totalMinutes / 6) / 10;
+    const earnings = hourlyWage > 0 ? Math.round((totalMinutes / 60) * hourlyWage) : null;
+
+    const emailMsg = monthlyShiftSummaryEmail({
+      username: user.username,
+      email: user.email,
+      monthName,
+      year: prevYear,
+      totalShifts: logRows.length,
+      totalHours,
+      earnings,
+      hourlyWage,
+      unloggedDates,
+    });
+
+    try {
+      await sendEmail(env, emailMsg);
+    } catch (e) {
+      console.error(`Failed to send monthly summary to ${user.email}:`, e);
+    }
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    ctx.waitUntil(handleMonthlyShiftSummary(env));
+  },
+};

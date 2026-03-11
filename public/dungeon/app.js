@@ -268,27 +268,12 @@
 
   // ── API helpers ──
 
-  function getToken() {
-    return sessionStorage.getItem("dungeon_token");
-  }
-
-  function setToken(token) {
-    sessionStorage.setItem("dungeon_token", token);
-  }
-
-  function clearToken() {
-    sessionStorage.removeItem("dungeon_token");
-  }
-
   async function api(method, path, body) {
     const opts = {
       method,
       headers: {},
+      credentials: "same-origin",
     };
-    const token = getToken();
-    if (token) {
-      opts.headers["Authorization"] = "Bearer " + token;
-    }
     if (body) {
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
@@ -302,10 +287,6 @@
   // ── Check session on load ──
 
   async function checkSession() {
-    if (!getToken()) {
-      renderLogin();
-      return;
-    }
     try {
       const data = await api("GET", "/me");
       currentUserId = data.id;
@@ -313,7 +294,6 @@
       currentRole = data.role || "staff";
       renderDashboard();
     } catch {
-      clearToken();
       renderLogin();
     }
   }
@@ -347,6 +327,7 @@
                 </button>
               </div>
             </div>
+            <label class="remember-label"><input type="checkbox" id="remember"> Zapamatovat přihlášení</label>
             <button type="submit" class="login-btn">Přihlásit se</button>
             <div class="login-error" id="login-error"></div>
           </form>
@@ -356,6 +337,14 @@
 
     const form = document.getElementById("login-form");
     form.addEventListener("submit", handleLogin);
+
+    // Cyan pulse on keystroke
+    const card = document.querySelector(".login-card");
+    form.addEventListener("input", () => {
+      card.classList.remove("pulse");
+      void card.offsetWidth;
+      card.classList.add("pulse");
+    });
 
     document.getElementById("password-toggle").addEventListener("click", () => {
       const input = document.getElementById("password");
@@ -380,8 +369,8 @@
     btn.textContent = "Přihlašování...";
 
     try {
-      const data = await api("POST", "/login", { username, password });
-      setToken(data.token);
+      const remember = document.getElementById("remember").checked;
+      const data = await api("POST", "/login", { username, password, remember });
       currentUserId = data.id;
       currentUser = data.username;
       currentRole = data.role || "staff";
@@ -404,6 +393,7 @@
     kvizy:     { label: "Kvízy",      icon: "\uD83C\uDFAF",       roles: ["admin", "quizmaster"], writeRoles: ["admin"] },
     smeny:     { label: "Směny",      icon: "\uD83D\uDCC5",       roles: ["admin", "staff"] },
     posta:     { label: "Pošta",      icon: "\u2709\uFE0F",       roles: ["admin"] },
+    obeznik:   { label: "Oběžníky",   icon: "\uD83D\uDCE8",       roles: ["admin"] },
     uzivatele: { label: "Uživatelé",  icon: "\uD83D\uDC65",       roles: ["admin"] },
     nastaveni: { label: "Nastavení",  icon: "\u2699\uFE0F",       roles: ["admin"] },
   };
@@ -520,6 +510,8 @@
       renderSmeny(content);
     } else if (currentPage === "posta") {
       renderPosta(content);
+    } else if (currentPage === "obeznik") {
+      renderObeznik(content);
     } else if (currentPage === "uzivatele") {
       renderUzivatele(content);
     } else if (currentPage === "nastaveni") {
@@ -1128,35 +1120,35 @@
 
   function renderSmeny(container) {
     const isStaff = currentRole === "staff";
+    const isAdmin = currentRole === "admin";
 
-    // Read sub-tab from hash (e.g. #smeny/zapis)
+    // Read sub-tab from hash (e.g. #smeny/zapis, #smeny/prehled)
     const hashSub = location.hash.replace("#", "").split("/")[1];
-    if (isStaff && hashSub === "zapis") smenyTab = "zapis";
-    else if (!isStaff) smenyTab = "rozpis";
+    if (hashSub === "prehled") smenyTab = "prehled";
+    else if (isStaff && hashSub === "zapis") smenyTab = "zapis";
+    else if (smenyTab !== "prehled") smenyTab = "rozpis";
 
-    // Sub-tabs: admin sees only Rozpis, staff sees Rozpis + Zápis
-    let tabsHtml = "";
-    if (isStaff) {
-      tabsHtml = `<div class="smeny-tabs">
-        <button class="smeny-tab${smenyTab === "rozpis" ? " active" : ""}" data-tab="rozpis">Rozpis</button>
-        <button class="smeny-tab${smenyTab === "zapis" ? " active" : ""}" data-tab="zapis">Zápis</button>
-      </div>`;
-    }
+    // Tabs: admin sees Rozpis + Přehled, staff sees Rozpis + Zápis + Přehled
+    let tabsHtml = `<div class="smeny-tabs">
+      <button class="smeny-tab${smenyTab === "rozpis" ? " active" : ""}" data-tab="rozpis">Rozpis</button>
+      ${isStaff ? `<button class="smeny-tab${smenyTab === "zapis" ? " active" : ""}" data-tab="zapis">Zápis</button>` : ""}
+      <button class="smeny-tab${smenyTab === "prehled" ? " active" : ""}" data-tab="prehled">Přehled</button>
+    </div>`;
 
     container.innerHTML = tabsHtml + '<div id="smeny-content"></div>';
 
-    if (isStaff) {
-      container.querySelectorAll(".smeny-tab").forEach(btn => {
-        btn.addEventListener("click", () => {
-          smenyTab = btn.dataset.tab;
-          location.hash = smenyTab === "rozpis" ? "smeny" : "smeny/" + smenyTab;
-          renderSmeny(container);
-        });
+    container.querySelectorAll(".smeny-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        smenyTab = btn.dataset.tab;
+        location.hash = smenyTab === "rozpis" ? "smeny" : "smeny/" + smenyTab;
+        renderSmeny(container);
       });
-    }
+    });
 
     const content = document.getElementById("smeny-content");
-    if (smenyTab === "zapis") {
+    if (smenyTab === "prehled") {
+      renderPrehled(content);
+    } else if (smenyTab === "zapis") {
       renderZapis(content);
     } else {
       renderRozpis(content);
@@ -1231,6 +1223,7 @@
   }
 
   async function silentRefreshShifts() {
+    if (!shiftViewYear || !shiftViewMonth) return;
     try {
       const fresh = await api("GET", "/shifts/" + shiftViewYear + "/" + shiftViewMonth);
       const oldJson = JSON.stringify(shiftMonthData?.days);
@@ -1909,6 +1902,213 @@
     } catch (err) {
       showToast(err.message, "error");
     }
+  }
+
+  // ── Přehled směn ──
+
+  async function renderPrehled(container) {
+    const isAdmin = currentRole === "admin";
+
+    // Load staff list for admin dropdown
+    if (isAdmin && !shiftStaff.length) {
+      try { shiftStaff = await api("GET", "/shifts/staff"); } catch (_) {}
+    }
+
+    let headerHtml = "";
+    if (isAdmin) {
+      const opts = shiftStaff.map(s =>
+        `<option value="${s.id}"${s.id === currentUserId ? " selected" : ""}>${esc(s.username)}</option>`
+      ).join("");
+      headerHtml = `<div class="prehled-header">
+        <label class="prehled-select-label">Zobrazit přehled pro</label>
+        <select class="prehled-select" id="prehled-user-select">${opts}</select>
+      </div>`;
+    }
+
+    container.innerHTML = headerHtml + '<div id="prehled-content" class="prehled-content"><div class="prehled-loading">Načítání…</div></div>';
+
+    if (isAdmin) {
+      document.getElementById("prehled-user-select").addEventListener("change", () => loadPrehled());
+    }
+
+    loadPrehled();
+  }
+
+  async function loadPrehled() {
+    const wrap = document.getElementById("prehled-content");
+    if (!wrap) return;
+
+    const isAdmin = currentRole === "admin";
+    let userId = null;
+    if (isAdmin) {
+      const sel = document.getElementById("prehled-user-select");
+      userId = sel ? sel.value : currentUserId;
+    }
+
+    wrap.innerHTML = '<div class="prehled-loading">Načítání…</div>';
+
+    try {
+      const url = "/shifts/overview" + (userId ? "?user_id=" + userId : "");
+      const data = await api("GET", url);
+      renderPrehledData(wrap, data);
+    } catch (err) {
+      wrap.innerHTML = `<div class="prehled-empty">Chyba: ${esc(err.message)}</div>`;
+    }
+  }
+
+  function renderPrehledData(wrap, data) {
+    const DAY_NAMES_FULL = ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"];
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr + "T00:00:00");
+      const day = d.getDate();
+      const month = d.getMonth() + 1;
+      const dayName = DAY_NAMES_FULL[d.getDay()];
+      return { short: day + ". " + month + ".", dayName, dow: d.getDay() };
+    }
+
+    function posLabel(pos) {
+      if (pos === "hookah") return "Dýmky";
+      if (pos === "bar") return "Bar";
+      return "Výpomoc";
+    }
+
+    function posIcon(pos) {
+      if (pos === "hookah") return "💨";
+      if (pos === "bar") return "🍸";
+      return "🤝";
+    }
+
+    function shiftTime(dow) {
+      if (dow === 5 || dow === 6) return "16:30 – 02:00";
+      return "16:30 – 22:00";
+    }
+
+    function formatCZK(amount) {
+      return Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0") + "\u00a0Kč";
+    }
+
+    let html = "";
+
+    // ── Upcoming shifts ──
+    html += '<div class="prehled-section">';
+    html += '<h3 class="prehled-section-title">Nadcházející směny</h3>';
+
+    if (data.upcoming.length === 0) {
+      html += '<div class="prehled-empty">Žádné naplánované směny v následujících 10 dnech</div>';
+    } else {
+      html += '<div class="prehled-cards">';
+      const today = new Date().toISOString().slice(0, 10);
+      for (const shift of data.upcoming) {
+        const f = formatDate(shift.date);
+        const isToday = shift.date === today;
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const isTomorrow = shift.date === tomorrow.toISOString().slice(0, 10);
+        let whenLabel = "";
+        if (isToday) whenLabel = '<span class="prehled-when prehled-when--today">Dnes</span>';
+        else if (isTomorrow) whenLabel = '<span class="prehled-when prehled-when--tomorrow">Zítra</span>';
+
+        html += `<div class="prehled-card${isToday ? " prehled-card--today" : ""}">
+          <div class="prehled-card-top">
+            <div class="prehled-card-date">
+              <span class="prehled-card-day">${f.short}</span>
+              <span class="prehled-card-dayname">${f.dayName}</span>
+            </div>
+            ${whenLabel}
+          </div>
+          <div class="prehled-card-body">
+            <span class="prehled-card-pos">${posIcon(shift.position)} ${posLabel(shift.position)}</span>
+            <span class="prehled-card-time">${shiftTime(f.dow)}</span>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // ── Past shifts (logged) ──
+    html += '<div class="prehled-section">';
+    html += '<h3 class="prehled-section-title">Odpracované směny</h3>';
+
+    const pastWithLogs = data.past.filter(s => s.log);
+    const pastWithoutLogs = data.past.filter(s => !s.log);
+
+    if (data.past.length === 0) {
+      html += '<div class="prehled-empty">Zatím žádné odpracované směny</div>';
+    } else {
+      html += '<div class="prehled-past-list">';
+      for (const shift of data.past) {
+        const f = formatDate(shift.date);
+        const hasLog = !!shift.log;
+        let timeStr = shiftTime(f.dow);
+        let hoursStr = "";
+        if (hasLog) {
+          timeStr = shift.log.time_from + " – " + shift.log.time_to;
+          const [fH, fM] = shift.log.time_from.split(":").map(Number);
+          const [tH, tM] = shift.log.time_to.split(":").map(Number);
+          let mins = (tH * 60 + tM) - (fH * 60 + fM);
+          if (mins <= 0) mins += 1440;
+          const hrs = mins / 60;
+          hoursStr = hrs % 1 === 0 ? hrs + "h" : hrs.toFixed(1) + "h";
+        }
+
+        html += `<div class="prehled-past-row${!hasLog ? " prehled-past-row--nolog" : ""}"${!hasLog ? ` data-goto-zapis="${shift.date}"` : ""}>
+          <div class="prehled-past-date">
+            <span class="prehled-past-day">${f.short}</span>
+            <span class="prehled-past-dayname">${f.dayName}</span>
+          </div>
+          <span class="prehled-past-pos">${posIcon(shift.position)} ${posLabel(shift.position)}</span>
+          <span class="prehled-past-time">${timeStr}</span>
+          ${hoursStr ? `<span class="prehled-past-hours">${hoursStr}</span>` : `<span class="prehled-past-nolog">nezapsáno</span>`}
+        </div>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // ── Summary ──
+    html += '<div class="prehled-section">';
+    html += '<h3 class="prehled-section-title">Souhrn</h3>';
+    html += '<div class="prehled-summary">';
+
+    html += `<div class="prehled-stat">
+      <span class="prehled-stat-value">${data.summary.total_shifts}</span>
+      <span class="prehled-stat-label">odpracovaných směn</span>
+    </div>`;
+
+    html += `<div class="prehled-stat">
+      <span class="prehled-stat-value">${data.summary.total_hours}h</span>
+      <span class="prehled-stat-label">celkem hodin</span>
+    </div>`;
+
+    if (data.summary.total_earnings !== null) {
+      html += `<div class="prehled-stat prehled-stat--earnings">
+        <span class="prehled-stat-value">${formatCZK(data.summary.total_earnings)}</span>
+        <span class="prehled-stat-label">orientační výdělek</span>
+        <span class="prehled-stat-hint">Při sazbě ${data.summary.hourly_wage}\u00a0Kč/h. Skutečná částka se může lišit.</span>
+      </div>`;
+    }
+
+    html += '</div>';
+    html += '</div>';
+
+    wrap.innerHTML = html;
+
+    // Click on unlogged past shift → go to Zápis for that date
+    wrap.querySelectorAll("[data-goto-zapis]").forEach(el => {
+      el.addEventListener("click", () => {
+        const date = el.dataset.gotoZapis;
+        const d = new Date(date + "T00:00:00");
+        zapisSelectedDate = date;
+        zapisViewYear = d.getFullYear();
+        zapisViewMonth = d.getMonth() + 1;
+        smenyTab = "zapis";
+        location.hash = "smeny/zapis";
+        const container = document.getElementById("smeny-content").parentElement;
+        renderSmeny(container);
+      });
+    });
   }
 
   // ── Zápis směn ──
@@ -3162,6 +3362,7 @@
               <td class="users-date">${u.created_at ? new Date(u.created_at).toLocaleDateString("cs-CZ") : "–"}</td>
               <td style="white-space:nowrap;">
                 ${isPending ? `<button class="btn-small btn-edit" data-reinvite-user="${u.id}" style="margin-right:.3rem;">Poslat znovu</button>` : ""}
+                ${!isPending && u.username !== currentUser ? `<button class="btn-small btn-secondary" data-force-logout="${u.id}" style="margin-right:.3rem;">Odhlásit</button>` : ""}
                 ${u.username !== currentUser ? `<button class="btn-danger-sm" data-delete-user="${u.id}">Smazat</button>` : ""}
               </td>
             </tr>`;
@@ -3248,6 +3449,21 @@
       });
     });
 
+    // Force-logout handlers
+    list.querySelectorAll("[data-force-logout]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const userId = Number(btn.dataset.forceLogout);
+        const user = adminUsers.find((u) => u.id === userId);
+        if (!await showConfirm("Odhlásit uživatele", `Opravdu odhlásit uživatele &bdquo;${esc(user?.username || "")}&ldquo; ze všech zařízení?`)) return;
+        try {
+          await api("POST", "/users/" + userId + "/force-logout");
+          showToast("Uživatel odhlášen");
+        } catch (err) {
+          showToast(err.message, "error");
+        }
+      });
+    });
+
     // Delete handlers
     list.querySelectorAll("[data-delete-user]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -3273,12 +3489,84 @@
     } catch {
       // ignore
     }
-    clearToken();
     currentUserId = null;
     currentUser = null;
     currentRole = null;
     currentPage = null;
     renderLogin();
+  }
+
+  // ── Nastavení ──
+
+  // ── Oběžníky ──
+
+  const newsletters = [
+    {
+      id: "monthly-summary",
+      title: "Měsíční přehled směn",
+      description: "Souhrn odpracovaných směn, hodin a orientačního výdělku za předchozí měsíc. Obsahuje varování o nezapsaných směnách.",
+      frequency: "1× měsíčně (1. den v měsíci, 8:00)",
+      recipients: "Všichni staff a admin s přiřazenými směnami v daném měsíci",
+    },
+  ];
+
+  function renderObeznik(container) {
+    container.innerHTML = `
+      <div class="obeznik-list" id="obeznik-list">
+        ${newsletters.map(n => `
+          <div class="obeznik-card" data-id="${n.id}">
+            <div class="obeznik-card-header">
+              <h3 class="obeznik-card-title">${esc(n.title)}</h3>
+              <span class="obeznik-card-freq">${esc(n.frequency)}</span>
+            </div>
+            <p class="obeznik-card-desc">${esc(n.description)}</p>
+            <p class="obeznik-card-recipients"><strong>Příjemci:</strong> ${esc(n.recipients)}</p>
+          </div>
+        `).join("")}
+      </div>
+      <div id="obeznik-preview" class="obeznik-preview" style="display:none;">
+        <button class="btn-secondary" id="obeznik-back">← Zpět</button>
+        <div class="obeznik-preview-meta" id="obeznik-preview-meta"></div>
+        <div class="obeznik-preview-frame-wrap">
+          <iframe id="obeznik-preview-iframe" class="obeznik-preview-iframe" sandbox=""></iframe>
+        </div>
+      </div>
+    `;
+
+    container.querySelectorAll(".obeznik-card").forEach(card => {
+      card.addEventListener("click", () => loadObeznikPreview(card.dataset.id));
+    });
+
+    document.getElementById("obeznik-back").addEventListener("click", () => {
+      document.getElementById("obeznik-list").style.display = "";
+      document.getElementById("obeznik-preview").style.display = "none";
+    });
+  }
+
+  async function loadObeznikPreview(id) {
+    const listEl = document.getElementById("obeznik-list");
+    const previewEl = document.getElementById("obeznik-preview");
+    const metaEl = document.getElementById("obeznik-preview-meta");
+    const iframe = document.getElementById("obeznik-preview-iframe");
+
+    listEl.style.display = "none";
+    previewEl.style.display = "";
+    metaEl.innerHTML = '<span class="obeznik-loading">Načítání náhledu…</span>';
+
+    try {
+      const data = await api("GET", "/newsletters/" + id + "/preview");
+      const nl = newsletters.find(n => n.id === id);
+
+      metaEl.innerHTML = `
+        <h2 class="obeznik-preview-title">${esc(nl ? nl.title : id)}</h2>
+        <p class="obeznik-preview-subject">Předmět: <strong>${esc(data.subject)}</strong></p>
+        <p class="obeznik-preview-hint">Ukázkový email s náhodnými údaji</p>
+      `;
+
+      iframe.srcdoc = data.html;
+    } catch (err) {
+      metaEl.innerHTML = `<p class="obeznik-error">Chyba: ${esc(err.message)}</p>`;
+    }
   }
 
   // ── Nastavení ──
