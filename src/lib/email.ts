@@ -355,6 +355,56 @@ https://spirit-bar.cz`;
   return { to: email, subject: `Přehled směn – ${monthName} ${year}`, html, text };
 }
 
+export function quizAdminNotificationEmail(opts: QuizEmailOpts): EmailMessage {
+  const { quizNumber, date, teamName, icon, members, email } = opts;
+  const czDate = formatCzechDate(date);
+
+  const membersList = members.map((m) => `<li style="padding:2px 0;">${escapeHtml(m)}</li>`).join("");
+
+  const html = emailLayout(`
+      <h1 style="margin:0 0 24px;font-size:28px;text-align:center;color:#fff;">Nová registrace na kvíz</h1>
+      <p style="margin:0 0 20px;font-size:16px;color:#ccc;text-align:center;">Na Kvíz #${quizNumber} se zaregistroval nový tým.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;width:120px;">Kvíz</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;">#${quizNumber} – ${czDate}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;">Tým</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;">${escapeHtml(icon)} ${escapeHtml(teamName)}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;">Kontakt</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;"><a href="mailto:${escapeHtml(email)}" style="color:#00cfff;text-decoration:none;">${escapeHtml(email)}</a></td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#888;vertical-align:top;">Členové</td>
+          <td style="padding:10px 0;color:#e0e0e0;"><ul style="margin:0;padding:0 0 0 18px;">${membersList}</ul></td>
+        </tr>
+      </table>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="https://spirit-bar.cz/dungeon#kvizy" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#2635d4,#00cfff);color:#fff;text-decoration:none;border-radius:100px;font-weight:600;font-size:14px;">Otevřít Dungeon</a>
+      </div>
+  `);
+
+  const membersText = members.map((m, i) => `  ${i + 1}. ${m}`).join("\n");
+  const text = `Nová registrace na Kvíz #${quizNumber}
+
+Kvíz: #${quizNumber} – ${czDate}
+Tým: ${icon} ${teamName}
+Kontakt: ${email}
+Členové:
+${membersText}
+
+---
+SPiRiT – Bar, Hookah Lounge & Coffee
+Školní 605/18, 415 01 Teplice
++420 731 829 346
+https://spirit-bar.cz`;
+
+  return { to: "kvizy@spirit-bar.cz", subject: `Nová registrace – Kvíz #${quizNumber}: ${icon} ${teamName}`, html, text };
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

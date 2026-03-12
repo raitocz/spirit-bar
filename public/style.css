@@ -67,7 +67,7 @@ nav {
 }
 .nav-logo img { height: 36px; display: block; }
 
-.nav-links { display: flex; gap: 2.2rem; list-style: none; margin-left: auto; }
+.nav-links { display: flex; align-items: center; gap: 2.2rem; list-style: none; margin-left: auto; }
 .nav-links a {
   color: var(--muted);
   text-decoration: none;
@@ -76,6 +76,16 @@ nav {
   letter-spacing: .07em;
   text-transform: uppercase;
   transition: color .2s;
+}
+.nav-links a.nav-page {
+  color: var(--cyan);
+  border: 1px solid rgba(0,207,255,.35);
+  border-radius: 100px;
+  padding: .25rem .75rem;
+}
+.nav-links a.nav-page:hover {
+  background: rgba(0,207,255,.1);
+  border-color: var(--cyan);
 }
 .nav-links a:hover { color: var(--cyan); }
 .nav-links a.active {
@@ -2282,6 +2292,14 @@ body.light nav {
   border-bottom-color: rgba(38,53,212,.12);
 }
 body.light .nav-links a { color: #4a5568; }
+body.light .nav-links a.nav-page {
+  color: var(--blue);
+  border-color: rgba(38,53,212,.35);
+}
+body.light .nav-links a.nav-page:hover {
+  background: rgba(38,53,212,.08);
+  border-color: var(--blue);
+}
 body.light .nav-links a:hover,
 body.light .nav-links a.active { color: var(--blue); }
 body.light .nav-links a.active::after {

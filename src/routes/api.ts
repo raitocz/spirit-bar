@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { sendEmail, quizRegistrationEmail } from "../lib/email";
+import { sendEmail, quizRegistrationEmail, quizAdminNotificationEmail } from "../lib/email";
 
 type Bindings = {
   DB: D1Database;
@@ -216,8 +216,20 @@ api.post("/quizzes/:id/register", async (c) => {
       members,
       email: body.email!.trim().toLowerCase(),
     });
+    const adminMsg = quizAdminNotificationEmail({
+      quizNumber: quiz.quiz_number,
+      date: quiz.date,
+      price: quiz.price,
+      teamName: trimmedName,
+      icon,
+      members,
+      email: body.email!.trim().toLowerCase(),
+    });
     c.executionCtx.waitUntil(
-      sendEmail(c.env, emailMsg).catch(() => {})
+      Promise.all([
+        sendEmail(c.env, emailMsg).catch(() => {}),
+        sendEmail(c.env, adminMsg).catch(() => {}),
+      ])
     );
   } catch {
     // never fail registration due to email error
