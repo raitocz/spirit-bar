@@ -1275,8 +1275,8 @@
     const isAdmin = currentRole === "admin";
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    const hookahStaff = shiftStaff.filter(s => s.staff_type === "hookah" || s.staff_type === "both");
-    const barStaff = shiftStaff.filter(s => s.staff_type === "bartender" || s.staff_type === "both");
+    const hookahStaff = shiftStaff.filter(s => s.staff_type === "hookah" || s.staff_type === "both" || s.role === "admin");
+    const barStaff = shiftStaff.filter(s => s.staff_type === "bartender" || s.staff_type === "both" || s.role === "admin");
 
     let html = `<table class="shifts-table">
       <thead><tr>
@@ -1537,6 +1537,7 @@
     // Not assigned — check if current user can self-assign
     const selfStaff = shiftStaff.find(s => s.id === currentUserId);
     const qualified = selfStaff && (
+      selfStaff.role === "admin" ||
       (position === "hookah" && ["hookah", "both"].includes(selfStaff.staff_type)) ||
       (position === "bar" && ["bartender", "both"].includes(selfStaff.staff_type))
     );
@@ -1553,7 +1554,14 @@
 
     for (const u of list) {
       const isSelf = u.id === currentUserId;
-      const canRemove = isAdmin || isSelf;
+      let canRemove = isAdmin || isSelf;
+      // Staff: apply 7-day lock for helper removal (same as shift positions)
+      if (canRemove && !isAdmin && isSelf && status === "helper") {
+        const now = new Date();
+        const lockDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+        const lockStr = lockDate.toISOString().slice(0, 10);
+        if (day.date <= lockStr) canRemove = false;
+      }
       const chipColor = u.color;
       const chipStyle = chipColor
         ? `background:${chipColor}25;border-color:${chipColor}55;color:${chipColor}`
@@ -1830,8 +1838,8 @@
     if (!day) return;
 
     const staffList = col === "hookah"
-      ? shiftStaff.filter(s => s.staff_type === "hookah" || s.staff_type === "both")
-      : shiftStaff.filter(s => s.staff_type === "bartender" || s.staff_type === "both");
+      ? shiftStaff.filter(s => s.staff_type === "hookah" || s.staff_type === "both" || s.role === "admin")
+      : shiftStaff.filter(s => s.staff_type === "bartender" || s.staff_type === "both" || s.role === "admin");
 
     const currentId = day[col]?.id || null;
 

@@ -1088,7 +1088,7 @@ dungeon.get("/api/shifts/staff", async (c) => {
   const denied = requireRole(c, "admin", "staff");
   if (denied) return denied;
   const { results } = await c.env.DB.prepare(
-    "SELECT id, username, staff_type, color FROM admins WHERE role IN ('admin', 'staff') ORDER BY username"
+    "SELECT id, username, staff_type, color, role FROM admins WHERE role IN ('admin', 'staff') ORDER BY username"
   ).all();
   return c.json(results);
 });
@@ -1192,16 +1192,18 @@ dungeon.put("/api/shifts/:date", async (c) => {
 
   const body = await c.req.json<{ hookah_user_id?: number | null; bar_user_id?: number | null }>();
 
-  // Validate staff types if set
+  // Validate staff types if set (admin-role users bypass qualification check)
   if (body.hookah_user_id) {
-    const user = await c.env.DB.prepare("SELECT staff_type FROM admins WHERE id = ?").bind(body.hookah_user_id).first<{ staff_type: string }>();
-    if (!user || !["hookah", "both"].includes(user.staff_type)) {
+    const user = await c.env.DB.prepare("SELECT staff_type, role FROM admins WHERE id = ?").bind(body.hookah_user_id).first<{ staff_type: string; role: string }>();
+    if (!user) return c.json({ error: "user not found" }, 400);
+    if (user.role !== "admin" && !["hookah", "both"].includes(user.staff_type)) {
       return c.json({ error: "user is not qualified for hookah position" }, 400);
     }
   }
   if (body.bar_user_id) {
-    const user = await c.env.DB.prepare("SELECT staff_type FROM admins WHERE id = ?").bind(body.bar_user_id).first<{ staff_type: string }>();
-    if (!user || !["bartender", "both"].includes(user.staff_type)) {
+    const user = await c.env.DB.prepare("SELECT staff_type, role FROM admins WHERE id = ?").bind(body.bar_user_id).first<{ staff_type: string; role: string }>();
+    if (!user) return c.json({ error: "user not found" }, 400);
+    if (user.role !== "admin" && !["bartender", "both"].includes(user.staff_type)) {
       return c.json({ error: "user is not qualified for bar position" }, 400);
     }
   }
@@ -1298,16 +1300,18 @@ dungeon.put("/api/shifts/:date/self-assign", async (c) => {
       return c.json({ error: "you are not assigned to this position" }, 400);
     }
   } else {
-    // Verify staff_type qualification
-    const user = await c.env.DB.prepare("SELECT staff_type FROM admins WHERE id = ?")
-      .bind(currentUser.sub).first<{ staff_type: string }>();
+    // Verify staff_type qualification (admin-role users bypass)
+    const user = await c.env.DB.prepare("SELECT staff_type, role FROM admins WHERE id = ?")
+      .bind(currentUser.sub).first<{ staff_type: string; role: string }>();
     if (!user) return c.json({ error: "user not found" }, 404);
 
-    if (body.position === "hookah" && !["hookah", "both"].includes(user.staff_type)) {
-      return c.json({ error: "not qualified for hookah position" }, 403);
-    }
-    if (body.position === "bar" && !["bartender", "both"].includes(user.staff_type)) {
-      return c.json({ error: "not qualified for bar position" }, 403);
+    if (user.role !== "admin") {
+      if (body.position === "hookah" && !["hookah", "both"].includes(user.staff_type)) {
+        return c.json({ error: "not qualified for hookah position" }, 403);
+      }
+      if (body.position === "bar" && !["bartender", "both"].includes(user.staff_type)) {
+        return c.json({ error: "not qualified for bar position" }, 403);
+      }
     }
 
     // Check not already on other position or helper
@@ -1366,17 +1370,21 @@ dungeon.put("/api/shifts/:date/availability", async (c) => {
     }
   }
 
-  // Check if user is already assigned to a shift (hookah/bar/helper) this day
-  const assignedShift = await c.env.DB.prepare("SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?").bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
-  const isOnShift = assignedShift && (assignedShift.hookah_user_id === body.user_id || assignedShift.bar_user_id === body.user_id);
-  const isHelper = await c.env.DB.prepare("SELECT id FROM shift_availability WHERE date = ? AND user_id = ? AND status = 'helper'").bind(date, body.user_id).first();
-
-  if (isOnShift || isHelper) {
-    return c.json({ error: "Tento člověk je na tento den již zapsaný na směně" }, 400);
-  }
-
   if (body.status === null || body.status === undefined) {
-    // Remove availability
+    // Remove availability/helper — staff can only remove within 7-day lock for helper
+    if (currentUser.role === "staff") {
+      const existingStatus = await c.env.DB.prepare(
+        "SELECT status FROM shift_availability WHERE date = ? AND user_id = ?"
+      ).bind(date, body.user_id).first<{ status: string }>();
+      if (existingStatus?.status === "helper") {
+        const now = new Date();
+        const lockDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+        const lockStr = lockDate.toISOString().slice(0, 10);
+        if (date <= lockStr) {
+          return c.json({ error: "Nemůžeš se odebrat z výpomoci v následujících 7 dnech" }, 400);
+        }
+      }
+    }
     await c.env.DB.prepare("DELETE FROM shift_availability WHERE date = ? AND user_id = ?")
       .bind(date, body.user_id).run();
   } else {
@@ -1385,6 +1393,12 @@ dungeon.put("/api/shifts/:date/availability", async (c) => {
     }
     if (body.status === "helper" && dow !== 5 && dow !== 6) {
       return c.json({ error: "helper is only available on Friday and Saturday" }, 400);
+    }
+    // Check if user is already assigned to a shift (hookah/bar) this day
+    const assignedShift = await c.env.DB.prepare("SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?").bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
+    const isOnShift = assignedShift && (assignedShift.hookah_user_id === body.user_id || assignedShift.bar_user_id === body.user_id);
+    if (isOnShift) {
+      return c.json({ error: "Tento člověk je na tento den již zapsaný na směně" }, 400);
     }
     await c.env.DB.prepare(
       `INSERT INTO shift_availability (date, user_id, status)
