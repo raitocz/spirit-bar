@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.1 (2026-03-12)
+- Opravena šířka changelog modalu v administraci
+
 ## 1.8.0 (2026-03-12)
 - Automatické verzování s changelogem (semver) při každém commitu
 - Číslo verze a changelog zobrazitelný v administraci (sidebar badge)
