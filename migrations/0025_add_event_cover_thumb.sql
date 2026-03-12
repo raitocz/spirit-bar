@@ -1,0 +1,1 @@
+ALTER TABLE events ADD COLUMN cover_thumb_r2_key TEXT DEFAULT NULL;

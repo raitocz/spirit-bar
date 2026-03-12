@@ -4,6 +4,7 @@ import { api } from "./routes/api";
 import { dungeon } from "./routes/dungeon";
 import { createGalerie } from "./routes/galerie";
 import { createKviz } from "./routes/kviz";
+import { createAkce } from "./routes/akce";
 import { errorPage } from "./lib/layout";
 import { sendEmail, monthlyShiftSummaryEmail } from "./lib/email";
 
@@ -86,6 +87,7 @@ app.route("/dungeon", dungeon);
 // Default (Czech) routes
 app.route("/galerie", createGalerie(""));
 app.route("/kviz", createKviz(""));
+app.route("/akce", createAkce(""));
 
 // Language-prefixed routes
 const LANGS = ["en", "de", "pl", "sigma"] as const;
@@ -105,6 +107,7 @@ for (const lang of LANGS) {
   // Subpages: /:lang/galerie, /:lang/kviz
   app.route(`/${lang}/galerie`, createGalerie(`/${lang}`));
   app.route(`/${lang}/kviz`, createKviz(`/${lang}`));
+  app.route(`/${lang}/akce`, createAkce(`/${lang}`));
 }
 
 // Catch-all: let CF Assets handle static files; if nothing matched, 404

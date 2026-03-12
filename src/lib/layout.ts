@@ -70,6 +70,7 @@ const navLinks: { href: string; label: string }[] = [
   { href: "/#contact", label: "Kontakt" },
   { href: "/galerie", label: "Galerie" },
   { href: "/kviz", label: "Kvíz" },
+  { href: "/akce", label: "Akce" },
 ];
 
 function prefixHref(href: string, prefix: string): string {

@@ -6,7 +6,7 @@
   let currentUser = null;
   let currentRole = null;
   let currentUserId = null;
-  const validPages = ["galerie", "kvizy", "smeny", "posta", "uzivatele", "nastaveni"];
+  const validPages = ["galerie", "kvizy", "smeny", "akce", "posta", "obeznik", "uzivatele", "nastaveni"];
   let currentPage = (function() {
     const h = location.hash.replace("#", "").split("/")[0];
     return validPages.includes(h) ? h : null;
@@ -392,6 +392,7 @@
     galerie:   { label: "Galerie",    icon: "\uD83D\uDDBC\uFE0F", roles: ["admin"] },
     kvizy:     { label: "Kvízy",      icon: "\uD83C\uDFAF",       roles: ["admin", "quizmaster"], writeRoles: ["admin"] },
     smeny:     { label: "Směny",      icon: "\uD83D\uDCC5",       roles: ["admin", "staff"] },
+    akce:      { label: "Kalendář akcí", icon: "\uD83C\uDF89",    roles: ["admin"] },
     posta:     { label: "Pošta",      icon: "\u2709\uFE0F",       roles: ["admin"] },
     obeznik:   { label: "Oběžníky",   icon: "\uD83D\uDCE8",       roles: ["admin"] },
     uzivatele: { label: "Uživatelé",  icon: "\uD83D\uDC65",       roles: ["admin"] },
@@ -508,6 +509,8 @@
       renderKvizy(content);
     } else if (currentPage === "smeny") {
       renderSmeny(content);
+    } else if (currentPage === "akce") {
+      renderAkce(content);
     } else if (currentPage === "posta") {
       renderPosta(content);
     } else if (currentPage === "obeznik") {
@@ -3497,6 +3500,416 @@
   }
 
   // ── Nastavení ──
+
+  // ── Kalendář akcí ──
+
+  let akceViewYear = null;
+  let akceViewMonth = null;
+  let akceSelectedDate = null;
+  let akceMonthEvents = [];
+
+  function renderAkce(container) {
+    const now = new Date();
+    if (!akceViewYear) akceViewYear = now.getFullYear();
+    if (!akceViewMonth) akceViewMonth = now.getMonth() + 1;
+
+    container.innerHTML = `
+      <div class="akce-layout">
+        <div class="akce-calendar" id="akce-calendar"></div>
+        <div class="akce-panel" id="akce-panel">
+          <div class="zapis-info"><span class="zapis-info-icon">📅</span><p>Vyber den v kalendáři</p></div>
+        </div>
+      </div>
+    `;
+
+    loadAkceMonth().then(() => {
+      renderAkceCalendar();
+      if (!akceSelectedDate) {
+        const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+        akceSelectedDate = today;
+        renderAkceCalendar();
+        renderAkceDay();
+      }
+    });
+  }
+
+  async function loadAkceMonth() {
+    try {
+      akceMonthEvents = await api("GET", "/events/month/" + akceViewYear + "/" + akceViewMonth);
+    } catch (_) {
+      akceMonthEvents = [];
+    }
+  }
+
+  function renderAkceCalendar() {
+    const cal = document.getElementById("akce-calendar");
+    if (!cal) return;
+
+    const year = akceViewYear;
+    const month = akceViewMonth;
+    const now = new Date();
+    const todayISO = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const firstDow = new Date(year, month - 1, 1).getDay();
+    const startOffset = (firstDow + 6) % 7;
+
+    // Dates that have events
+    const eventDates = new Set(akceMonthEvents.map(e => e.date));
+
+    let gridHtml = "";
+    const hdrs = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"];
+    for (const h of hdrs) {
+      gridHtml += '<div class="zapis-cal-hdr">' + h + '</div>';
+    }
+    for (let i = 0; i < startOffset; i++) {
+      gridHtml += '<div class="zapis-cal-day zapis-cal-day--empty"></div>';
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = year + "-" + String(month).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+      const isSelected = dateStr === akceSelectedDate;
+      const isToday = dateStr === todayISO;
+      const hasEvent = eventDates.has(dateStr);
+
+      let cls = "zapis-cal-day";
+      if (isSelected) cls += " zapis-cal-day--selected";
+      else if (hasEvent) cls += " zapis-cal-day--pending";
+      if (isToday && !isSelected) cls += " zapis-cal-day--today";
+
+      gridHtml += '<div class="' + cls + '" data-date="' + dateStr + '">' + d + '</div>';
+    }
+
+    cal.innerHTML = '<div class="zapis-cal-nav">' +
+      '<button class="shifts-nav-btn" id="akce-prev">&lsaquo;</button>' +
+      '<span class="zapis-cal-title">' + MONTH_NAMES[month - 1] + ' ' + year + '</span>' +
+      '<button class="shifts-nav-btn" id="akce-next">&rsaquo;</button>' +
+      '</div><div class="zapis-cal-grid">' + gridHtml + '</div>';
+
+    document.getElementById("akce-prev").addEventListener("click", async () => {
+      akceViewMonth--;
+      if (akceViewMonth < 1) { akceViewMonth = 12; akceViewYear--; }
+      await loadAkceMonth();
+      renderAkceCalendar();
+    });
+    document.getElementById("akce-next").addEventListener("click", async () => {
+      akceViewMonth++;
+      if (akceViewMonth > 12) { akceViewMonth = 1; akceViewYear++; }
+      await loadAkceMonth();
+      renderAkceCalendar();
+    });
+
+    cal.querySelectorAll(".zapis-cal-day[data-date]").forEach(el => {
+      el.addEventListener("click", () => {
+        akceSelectedDate = el.dataset.date;
+        renderAkceCalendar();
+        renderAkceDay();
+      });
+    });
+  }
+
+  function renderAkceDay() {
+    const panel = document.getElementById("akce-panel");
+    if (!panel || !akceSelectedDate) return;
+
+    const dateObj = new Date(akceSelectedDate + "T00:00:00");
+    const DAY_NAMES_FULL = ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"];
+    const dayLabel = DAY_NAMES_FULL[dateObj.getDay()] + " " + dateObj.getDate() + ". " + MONTH_NAMES[dateObj.getMonth()];
+
+    const dayEvents = akceMonthEvents.filter(e => e.date === akceSelectedDate);
+
+    let html = '<div class="akce-day-header">' +
+      '<span class="akce-day-title">' + esc(dayLabel) + '</span>' +
+      '<button class="btn-primary btn-small" id="akce-add-btn">+ Přidat akci</button>' +
+      '</div>';
+
+    if (dayEvents.length === 0) {
+      html += '<div class="akce-empty">Žádné akce v tento den</div>';
+    } else {
+      html += '<div class="akce-list">';
+      for (const ev of dayEvents) {
+        const tags = [];
+        if (ev.entry_fee > 0) tags.push(ev.entry_fee + " Kč");
+        if (ev.has_competitions) tags.push("Soutěže");
+        if (ev.has_special_drinks) tags.push("Speciální drinky");
+        if (ev.has_costume_reward) tags.push("Odměna za kostým");
+        if (ev.has_tasting) tags.push("Ochutnávková session");
+
+        html += '<div class="akce-card" data-id="' + ev.id + '">' +
+          (ev.cover_r2_key ? '<img class="akce-card-cover" src="/dungeon/photos/' + esc(ev.cover_r2_key) + '" alt="">' : '') +
+          '<div class="akce-card-body">' +
+          '<div class="akce-card-time">' + esc(ev.time) + '</div>' +
+          '<div class="akce-card-title">' + esc(ev.title) + '</div>' +
+          (tags.length ? '<div class="akce-card-tags">' + tags.map(t => '<span class="akce-tag">' + esc(t) + '</span>').join("") + '</div>' : '') +
+          '</div>' +
+          '<div class="akce-card-actions">' +
+          '<button class="btn-small btn-secondary akce-edit-btn" data-id="' + ev.id + '">Upravit</button>' +
+          '<button class="btn-small btn-delete akce-delete-btn" data-id="' + ev.id + '">Smazat</button>' +
+          '</div></div>';
+      }
+      html += '</div>';
+    }
+
+    panel.innerHTML = html;
+
+    document.getElementById("akce-add-btn").addEventListener("click", () => renderAkceForm(null));
+
+    panel.querySelectorAll(".akce-edit-btn").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try {
+          const ev = await api("GET", "/events/" + btn.dataset.id);
+          renderAkceForm(ev);
+        } catch (err) { showToast(err.message, "error"); }
+      });
+    });
+
+    panel.querySelectorAll(".akce-delete-btn").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm("Opravdu smazat tuto akci?")) return;
+        try {
+          await api("DELETE", "/events/" + btn.dataset.id);
+          akceMonthEvents = akceMonthEvents.filter(ev => ev.id !== Number(btn.dataset.id));
+          renderAkceCalendar();
+          renderAkceDay();
+          showToast("Akce smazána");
+        } catch (err) { showToast(err.message, "error"); }
+      });
+    });
+  }
+
+  function renderAkceForm(existing) {
+    const panel = document.getElementById("akce-panel");
+    if (!panel) return;
+
+    const isEdit = !!existing;
+    const date = isEdit ? existing.date : akceSelectedDate;
+    const dateTo = isEdit ? (existing.date_to || "") : "";
+    const time = isEdit ? existing.time : "19:00";
+    const title = isEdit ? existing.title : "";
+    const description = isEdit ? existing.description : "";
+    const entryFee = isEdit ? existing.entry_fee : 0;
+    const hasComp = isEdit ? existing.has_competitions : 0;
+    const hasDrinks = isEdit ? existing.has_special_drinks : 0;
+    const hasCostume = isEdit ? existing.has_costume_reward : 0;
+    const hasTasting = isEdit ? existing.has_tasting : 0;
+    const linkedQuizId = isEdit ? (existing.linked_quiz_id || 0) : 0;
+    const hasCover = isEdit && existing.cover_r2_key;
+
+    const timePicker = createTimePicker("akce-time", time, () => {});
+
+    panel.innerHTML = '<div class="akce-form">' +
+      '<div class="akce-form-header">' +
+        '<h3>' + (isEdit ? "Upravit akci" : "Nová akce") + '</h3>' +
+        '<button class="btn-secondary btn-small" id="akce-form-cancel">← Zpět</button>' +
+      '</div>' +
+      '<div class="form-group"><label>Datum do <span style="color:var(--muted);font-weight:400;font-size:.75em">(volitelné, pro vícedenní akce)</span></label><input type="text" id="akce-date-to" readonly placeholder="—"></div>' +
+      '<div class="form-group"><label>Čas začátku</label>' + timePicker.html + '</div>' +
+      '<div class="form-group"><label>Název akce</label><input type="text" id="akce-title" value="' + esc(title) + '" placeholder="např. Karaoke Night"></div>' +
+      '<div class="form-group"><label>Popis <span style="color:var(--muted);font-weight:400;font-size:.75em">(Markdown: **bold**, *italic*, - seznam)</span></label>' +
+        '<textarea id="akce-desc" rows="5" placeholder="Popis akce…">' + esc(description) + '</textarea></div>' +
+      '<div class="form-group"><label>Cover obrázek <span style="color:var(--muted);font-weight:400;font-size:.75em">(max 1280×720, webp)</span></label>' +
+        (hasCover ? '<div class="akce-cover-preview" id="akce-cover-preview"><img src="/dungeon/photos/' + esc(existing.cover_r2_key) + '" alt=""><button class="btn-small btn-delete" id="akce-cover-remove">Odebrat</button></div>' : '') +
+        '<input type="file" id="akce-cover-input" accept="image/*">' +
+        '<div class="akce-cover-thumb" id="akce-cover-thumb"></div>' +
+      '</div>' +
+      '<div class="akce-options">' +
+        '<div class="form-group"><label>Cena za účast (Kč)</label><input type="number" id="akce-fee" value="' + entryFee + '" min="0" step="50"></div>' +
+        '<label class="akce-toggle"><input type="checkbox" id="akce-comp"' + (hasComp ? ' checked' : '') + '><span>Soutěže</span></label>' +
+        '<label class="akce-toggle"><input type="checkbox" id="akce-drinks"' + (hasDrinks ? ' checked' : '') + '><span>Speciální drinky</span></label>' +
+        '<label class="akce-toggle"><input type="checkbox" id="akce-costume"' + (hasCostume ? ' checked' : '') + '><span>Odměna za kostým</span></label>' +
+        '<label class="akce-toggle"><input type="checkbox" id="akce-tasting"' + (hasTasting ? ' checked' : '') + '><span>Ochutnávková session</span></label>' +
+        '<label class="akce-toggle"><input type="checkbox" id="akce-quiz-toggle"' + (linkedQuizId ? ' checked' : '') + '><span>Pub Quiz</span></label>' +
+        '<div class="form-group" id="akce-quiz-select-wrap" style="' + (linkedQuizId ? '' : 'display:none') + '"><label>Propojený kvíz</label><div class="akce-quiz-picker" id="akce-quiz-picker"><div class="akce-quiz-picker-value" id="akce-quiz-picker-value">Načítání…</div></div></div>' +
+      '</div>' +
+      '<button class="btn-primary" id="akce-save">' + (isEdit ? "Uložit změny" : "Vytvořit akci") + '</button>' +
+    '</div>';
+
+    timePicker.wire();
+    DatePicker.create("akce-date-to", dateTo);
+
+    // Pub Quiz toggle + custom quiz picker
+    const quizToggle = document.getElementById("akce-quiz-toggle");
+    const quizSelectWrap = document.getElementById("akce-quiz-select-wrap");
+    const quizPicker = document.getElementById("akce-quiz-picker");
+    const quizPickerValue = document.getElementById("akce-quiz-picker-value");
+    let quizPickerSelectedId = linkedQuizId || "";
+    let quizPickerDropdown = null;
+    let quizPickerItems = [];
+
+    quizToggle.addEventListener("change", () => {
+      quizSelectWrap.style.display = quizToggle.checked ? "" : "none";
+      if (quizToggle.checked && !quizPickerItems.length) loadQuizzesForEvent();
+    });
+
+    function renderQuizPickerValue() {
+      if (!quizPickerSelectedId) {
+        quizPickerValue.textContent = "— Bez propojení —";
+        quizPickerValue.classList.add("placeholder");
+      } else {
+        const item = quizPickerItems.find(i => String(i.id) === String(quizPickerSelectedId));
+        quizPickerValue.textContent = item ? item.label : "Kvíz #" + quizPickerSelectedId;
+        quizPickerValue.classList.remove("placeholder");
+      }
+    }
+
+    function openQuizPicker() {
+      if (quizPickerDropdown) { closeQuizPicker(); return; }
+      quizPickerDropdown = document.createElement("div");
+      quizPickerDropdown.className = "akce-quiz-dropdown";
+      // "No link" option
+      let html = '<button type="button" class="akce-quiz-option' + (!quizPickerSelectedId ? ' selected' : '') + '" data-qid="">— Bez propojení —</button>';
+      for (const item of quizPickerItems) {
+        html += '<button type="button" class="akce-quiz-option' + (String(item.id) === String(quizPickerSelectedId) ? ' selected' : '') + (item.match ? ' match' : '') + '" data-qid="' + item.id + '">' +
+          '<span class="akce-quiz-option-label">' + esc(item.label) + '</span>' +
+          (item.match ? '<span class="akce-quiz-option-badge">Stejný den</span>' : '') +
+          '</button>';
+      }
+      quizPickerDropdown.innerHTML = html;
+      quizPicker.appendChild(quizPickerDropdown);
+
+      quizPickerDropdown.querySelectorAll(".akce-quiz-option").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          quizPickerSelectedId = btn.dataset.qid;
+          renderQuizPickerValue();
+          closeQuizPicker();
+        });
+      });
+
+      // Close on outside click
+      setTimeout(() => document.addEventListener("click", outsideClickQuiz), 0);
+    }
+
+    function closeQuizPicker() {
+      if (quizPickerDropdown) { quizPickerDropdown.remove(); quizPickerDropdown = null; }
+      document.removeEventListener("click", outsideClickQuiz);
+    }
+
+    function outsideClickQuiz(e) {
+      if (!quizPicker.contains(e.target)) closeQuizPicker();
+    }
+
+    quizPickerValue.addEventListener("click", (e) => { e.stopPropagation(); openQuizPicker(); });
+
+    async function loadQuizzesForEvent() {
+      try {
+        const quizzes = await api("GET", "/quizzes");
+        const sorted = quizzes.slice().sort((a, b) => {
+          const diffA = Math.abs(new Date(a.date) - new Date(date));
+          const diffB = Math.abs(new Date(b.date) - new Date(date));
+          return diffA - diffB;
+        });
+        quizPickerItems = sorted.map(q => {
+          const qDate = new Date(q.date + "T00:00:00");
+          const dateStr = qDate.toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric" });
+          return { id: q.id, label: "Kvíz #" + q.quiz_number + " – " + dateStr, match: q.date === date };
+        });
+        renderQuizPickerValue();
+      } catch (e) {
+        quizPickerValue.textContent = "Chyba při načítání";
+      }
+    }
+
+    if (linkedQuizId) loadQuizzesForEvent();
+
+    let coverFile = null;
+    let removeCover = false;
+    let coverDimensions = null;
+
+    // Cover preview for new upload
+    document.getElementById("akce-cover-input").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const resized = await resizeImage(file, 1280, 720, 0.88);
+        coverFile = new File([resized.blob], "cover.webp", { type: "image/webp" });
+        coverDimensions = { width: resized.width, height: resized.height };
+        const url = URL.createObjectURL(resized.blob);
+        const thumb = document.getElementById("akce-cover-thumb");
+        thumb.innerHTML = '<img src="' + url + '" alt="Náhled">';
+        // Hide old preview if exists
+        const oldPreview = document.getElementById("akce-cover-preview");
+        if (oldPreview) oldPreview.style.display = "none";
+      } catch (err) {
+        showToast("Chyba při zpracování obrázku: " + err.message, "error");
+      }
+    });
+
+    // Remove existing cover
+    const removeBtn = document.getElementById("akce-cover-remove");
+    if (removeBtn) {
+      removeBtn.addEventListener("click", () => {
+        removeCover = true;
+        document.getElementById("akce-cover-preview").style.display = "none";
+      });
+    }
+
+    document.getElementById("akce-form-cancel").addEventListener("click", () => renderAkceDay());
+
+    document.getElementById("akce-save").addEventListener("click", async () => {
+      const titleVal = document.getElementById("akce-title").value.trim();
+      const descVal = document.getElementById("akce-desc").value;
+      const timeVal = timePicker.getValue();
+      const fee = Number(document.getElementById("akce-fee").value) || 0;
+      const comp = document.getElementById("akce-comp").checked ? "1" : "0";
+      const drinks = document.getElementById("akce-drinks").checked ? "1" : "0";
+      const costume = document.getElementById("akce-costume").checked ? "1" : "0";
+      const tasting = document.getElementById("akce-tasting").checked ? "1" : "0";
+      const quizLinked = document.getElementById("akce-quiz-toggle").checked ? quizPickerSelectedId : "";
+
+      if (!titleVal) { showToast("Vyplň název akce", "error"); return; }
+      if (!timeVal || parseTime(timeVal) === null) { showToast("Vyplň čas začátku", "error"); return; }
+
+      const dateToVal = document.getElementById("akce-date-to").dataset.value || "";
+      const fd = new FormData();
+      fd.append("date", date);
+      fd.append("date_to", dateToVal);
+      fd.append("time", timeVal);
+      fd.append("title", titleVal);
+      fd.append("description", descVal);
+      fd.append("entry_fee", String(fee));
+      fd.append("has_competitions", comp);
+      fd.append("has_special_drinks", drinks);
+      fd.append("has_costume_reward", costume);
+      fd.append("has_tasting", tasting);
+      fd.append("linked_quiz_id", quizLinked);
+
+      if (coverFile) {
+        fd.append("cover", coverFile);
+        fd.append("cover_width", String(coverDimensions.width));
+        fd.append("cover_height", String(coverDimensions.height));
+        try {
+          const thumbBlob = await generateThumb(coverFile, 650, 0.82);
+          fd.append("cover_thumb", thumbBlob, "cover_thumb.webp");
+        } catch (e) { /* thumb generation failed, proceed without */ }
+      }
+      if (removeCover) {
+        fd.append("remove_cover", "1");
+      }
+
+      try {
+        const saveBtn = document.getElementById("akce-save");
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Ukládání…";
+
+        const url = isEdit ? "/events/" + existing.id : "/events";
+        const method = isEdit ? "PUT" : "POST";
+        const res = await fetch("/dungeon/api" + url, { method, body: fd, credentials: "same-origin" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Save failed");
+
+        showToast(isEdit ? "Akce upravena" : "Akce vytvořena");
+        await loadAkceMonth();
+        renderAkceCalendar();
+        renderAkceDay();
+      } catch (err) {
+        showToast(err.message, "error");
+        const saveBtn = document.getElementById("akce-save");
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = isEdit ? "Uložit změny" : "Vytvořit akci"; }
+      }
+    });
+  }
 
   // ── Oběžníky ──
 

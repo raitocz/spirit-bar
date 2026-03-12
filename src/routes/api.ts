@@ -257,6 +257,17 @@ api.get("/galleries", async (c) => {
   return c.json(galleries);
 });
 
+// ── Public events ──
+
+api.get("/events", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, date, date_to, time, title, description, cover_r2_key, cover_thumb_r2_key, entry_fee,
+            has_competitions, has_special_drinks, has_costume_reward, has_tasting, linked_quiz_id
+     FROM events ORDER BY date ASC, time ASC`
+  ).all();
+  return c.json(results);
+});
+
 api.get("/galleries/:id", async (c) => {
   const id = Number(c.req.param("id"));
   const gallery = await c.env.DB.prepare(

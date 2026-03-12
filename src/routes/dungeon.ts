@@ -57,8 +57,8 @@ function pickColor(usedColors: string[]): string {
 dungeon.get("/photos/:key{.+}", async (c) => {
   const key = c.req.param("key");
 
-  // Prevent path traversal — only allow keys under galleries/
-  if (!key.startsWith("galleries/") || key.includes("..")) {
+  // Prevent path traversal — only allow known prefixes
+  if ((!key.startsWith("galleries/") && !key.startsWith("events/")) || key.includes("..")) {
     return c.html(errorPage(403), 403);
   }
 
@@ -1626,6 +1626,202 @@ dungeon.get("/api/shifts/overview", async (c) => {
       hourly_wage: hourlyWage,
     },
   });
+});
+
+// ── Events (Kalendář akcí) ──
+
+dungeon.get("/api/events/month/:year/:month", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const year = Number(c.req.param("year"));
+  const month = Number(c.req.param("month"));
+  if (!year || !month || month < 1 || month > 12) {
+    return c.json({ error: "invalid year/month" }, 400);
+  }
+  const prefix = `${year}-${String(month).padStart(2, "0")}-%`;
+  const { results } = await c.env.DB.prepare(
+    "SELECT id, date, date_to, time, title, entry_fee, has_competitions, has_special_drinks, has_costume_reward, has_tasting, cover_r2_key, cover_thumb_r2_key FROM events WHERE date LIKE ? ORDER BY date, time"
+  ).bind(prefix).all();
+  return c.json(results);
+});
+
+dungeon.get("/api/events/:id", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const id = Number(c.req.param("id"));
+  const event = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
+  if (!event) return c.json({ error: "event not found" }, 404);
+  return c.json(event);
+});
+
+dungeon.post("/api/events", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+
+  const formData = await c.req.formData();
+  const date = formData.get("date") as string;
+  const dateTo = (formData.get("date_to") as string) || null;
+  const time = formData.get("time") as string;
+  const title = formData.get("title") as string;
+  const description = (formData.get("description") as string) || "";
+  const entryFee = Number(formData.get("entry_fee") || 0);
+  const hasCompetitions = formData.get("has_competitions") === "1" ? 1 : 0;
+  const hasSpecialDrinks = formData.get("has_special_drinks") === "1" ? 1 : 0;
+  const hasCostumeReward = formData.get("has_costume_reward") === "1" ? 1 : 0;
+  const hasTasting = formData.get("has_tasting") === "1" ? 1 : 0;
+  const linkedQuizId = Number(formData.get("linked_quiz_id") || 0) || null;
+
+  if (!date || !isValidDate(date)) return c.json({ error: "invalid date" }, 400);
+  if (dateTo && !isValidDate(dateTo)) return c.json({ error: "invalid date_to" }, 400);
+  if (dateTo && dateTo <= date) return c.json({ error: "date_to must be after date" }, 400);
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return c.json({ error: "invalid time" }, 400);
+  if (!title || !title.trim()) return c.json({ error: "title is required" }, 400);
+
+  // Handle optional cover image
+  let coverR2Key: string | null = null;
+  let coverThumbR2Key: string | null = null;
+  let coverWidth: number | null = null;
+  let coverHeight: number | null = null;
+  const coverFile = formData.get("cover") as File | null;
+
+  if (coverFile && coverFile.size > 0) {
+    const allowedTypes = ["image/webp", "image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(coverFile.type)) {
+      return c.json({ error: "invalid image type" }, 400);
+    }
+    if (coverFile.size > 5 * 1024 * 1024) {
+      return c.json({ error: "image too large (max 5 MB)" }, 413);
+    }
+    const ab = await coverFile.arrayBuffer();
+    const uuid = crypto.randomUUID();
+    coverR2Key = `events/${uuid}.webp`;
+    coverWidth = Number(formData.get("cover_width") || 0);
+    coverHeight = Number(formData.get("cover_height") || 0);
+
+    const uploads: Promise<any>[] = [
+      c.env.PHOTOS.put(coverR2Key, ab, { httpMetadata: { contentType: "image/webp" } }),
+    ];
+
+    const thumbFile = formData.get("cover_thumb") as File | null;
+    if (thumbFile && thumbFile.size > 0) {
+      coverThumbR2Key = `events/${uuid}_thumb.webp`;
+      uploads.push(c.env.PHOTOS.put(coverThumbR2Key, await thumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }));
+    }
+
+    await Promise.all(uploads);
+  }
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO events (date, date_to, time, title, description, cover_r2_key, cover_thumb_r2_key, cover_width, cover_height, entry_fee, has_competitions, has_special_drinks, has_costume_reward, has_tasting, linked_quiz_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(date, dateTo, time, title.trim(), description.trim(), coverR2Key, coverThumbR2Key, coverWidth, coverHeight, entryFee, hasCompetitions, hasSpecialDrinks, hasCostumeReward, hasTasting, linkedQuizId).run();
+
+  const row = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(result.meta.last_row_id).first();
+  return c.json(row, 201);
+});
+
+dungeon.put("/api/events/:id", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const id = Number(c.req.param("id"));
+
+  const existing = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first<any>();
+  if (!existing) return c.json({ error: "event not found" }, 404);
+
+  const formData = await c.req.formData();
+  const date = formData.get("date") as string;
+  const dateTo = (formData.get("date_to") as string) || null;
+  const time = formData.get("time") as string;
+  const title = formData.get("title") as string;
+  const description = (formData.get("description") as string) || "";
+  const entryFee = Number(formData.get("entry_fee") || 0);
+  const hasCompetitions = formData.get("has_competitions") === "1" ? 1 : 0;
+  const hasSpecialDrinks = formData.get("has_special_drinks") === "1" ? 1 : 0;
+  const hasCostumeReward = formData.get("has_costume_reward") === "1" ? 1 : 0;
+  const hasTasting = formData.get("has_tasting") === "1" ? 1 : 0;
+  const linkedQuizId = Number(formData.get("linked_quiz_id") || 0) || null;
+
+  if (!date || !isValidDate(date)) return c.json({ error: "invalid date" }, 400);
+  if (dateTo && !isValidDate(dateTo)) return c.json({ error: "invalid date_to" }, 400);
+  if (dateTo && dateTo <= date) return c.json({ error: "date_to must be after date" }, 400);
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return c.json({ error: "invalid time" }, 400);
+  if (!title || !title.trim()) return c.json({ error: "title is required" }, 400);
+
+  let coverR2Key = existing.cover_r2_key;
+  let coverThumbR2Key = existing.cover_thumb_r2_key;
+  let coverWidth = existing.cover_width;
+  let coverHeight = existing.cover_height;
+
+  const coverFile = formData.get("cover") as File | null;
+  const removeCover = formData.get("remove_cover") === "1";
+
+  if (removeCover && coverR2Key) {
+    const deletes: Promise<any>[] = [c.env.PHOTOS.delete(coverR2Key)];
+    if (coverThumbR2Key) deletes.push(c.env.PHOTOS.delete(coverThumbR2Key));
+    await Promise.all(deletes);
+    coverR2Key = null;
+    coverThumbR2Key = null;
+    coverWidth = null;
+    coverHeight = null;
+  }
+
+  if (coverFile && coverFile.size > 0) {
+    const allowedTypes = ["image/webp", "image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(coverFile.type)) {
+      return c.json({ error: "invalid image type" }, 400);
+    }
+    if (coverFile.size > 5 * 1024 * 1024) {
+      return c.json({ error: "image too large (max 5 MB)" }, 413);
+    }
+    // Delete old cover + thumb
+    const oldDeletes: Promise<any>[] = [];
+    if (existing.cover_r2_key) oldDeletes.push(c.env.PHOTOS.delete(existing.cover_r2_key));
+    if (existing.cover_thumb_r2_key) oldDeletes.push(c.env.PHOTOS.delete(existing.cover_thumb_r2_key));
+    if (oldDeletes.length) await Promise.all(oldDeletes);
+
+    const ab = await coverFile.arrayBuffer();
+    const uuid = crypto.randomUUID();
+    coverR2Key = `events/${uuid}.webp`;
+    coverWidth = Number(formData.get("cover_width") || 0);
+    coverHeight = Number(formData.get("cover_height") || 0);
+
+    const uploads: Promise<any>[] = [
+      c.env.PHOTOS.put(coverR2Key, ab, { httpMetadata: { contentType: "image/webp" } }),
+    ];
+
+    const thumbFile = formData.get("cover_thumb") as File | null;
+    coverThumbR2Key = null;
+    if (thumbFile && thumbFile.size > 0) {
+      coverThumbR2Key = `events/${uuid}_thumb.webp`;
+      uploads.push(c.env.PHOTOS.put(coverThumbR2Key, await thumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }));
+    }
+
+    await Promise.all(uploads);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE events SET date=?, date_to=?, time=?, title=?, description=?, cover_r2_key=?, cover_thumb_r2_key=?, cover_width=?, cover_height=?, entry_fee=?, has_competitions=?, has_special_drinks=?, has_costume_reward=?, has_tasting=?, linked_quiz_id=? WHERE id=?`
+  ).bind(date, dateTo, time, title.trim(), description.trim(), coverR2Key, coverThumbR2Key, coverWidth, coverHeight, entryFee, hasCompetitions, hasSpecialDrinks, hasCostumeReward, hasTasting, linkedQuizId, id).run();
+
+  const row = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
+  return c.json(row);
+});
+
+dungeon.delete("/api/events/:id", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const id = Number(c.req.param("id"));
+
+  const event = await c.env.DB.prepare("SELECT cover_r2_key, cover_thumb_r2_key FROM events WHERE id = ?").bind(id).first<{ cover_r2_key: string | null; cover_thumb_r2_key: string | null }>();
+  if (!event) return c.json({ error: "event not found" }, 404);
+
+  const deletes: Promise<any>[] = [];
+  if (event.cover_r2_key) deletes.push(c.env.PHOTOS.delete(event.cover_r2_key));
+  if (event.cover_thumb_r2_key) deletes.push(c.env.PHOTOS.delete(event.cover_thumb_r2_key));
+  if (deletes.length) await Promise.all(deletes);
+
+  await c.env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
+  return c.json({ ok: true });
 });
 
 // ── Oběžníky (newsletter preview) ──

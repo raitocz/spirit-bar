@@ -40,7 +40,22 @@
       var res = await fetch("/api/quizzes");
       if (!res.ok) throw new Error("Fetch failed");
       quizzesData = await res.json();
+
+      // Auto-open registration from ?register=<quiz_id>
+      var params = new URLSearchParams(window.location.search);
+      var regId = Number(params.get("register"));
+      if (regId) {
+        var quiz = quizzesData.find(function (q) { return q.id === regId; });
+        if (quiz) openFormQuizId = regId;
+      }
+
       renderAll();
+
+      // Scroll to the quiz card if auto-opened
+      if (regId) {
+        var card = container.querySelector('.kviz-card[data-quiz-id="' + regId + '"]');
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     } catch (e) {
       container.innerHTML =
         '<div class="container" style="padding-top:8rem;text-align:center;">' +
