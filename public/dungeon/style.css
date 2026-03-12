@@ -318,6 +318,68 @@ body {
   background: rgba(208,85,96,.06);
 }
 
+.sidebar-version {
+  padding: .6rem 1.4rem;
+  font-size: .72rem;
+  color: var(--muted);
+  opacity: .6;
+  transition: opacity .2s;
+}
+
+.sidebar-version:hover {
+  opacity: 1;
+  color: var(--cyan);
+}
+
+/* ── Changelog modal ── */
+
+.changelog-modal {
+  max-width: 560px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.changelog-content {
+  margin-bottom: 1.2rem;
+}
+
+.changelog-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.changelog-version {
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--cyan);
+  margin-top: 1.2rem;
+  margin-bottom: .4rem;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid rgba(0,207,255,.1);
+}
+
+.changelog-version:first-child {
+  margin-top: 0;
+}
+
+.changelog-item {
+  font-size: .82rem;
+  color: var(--text);
+  padding: .15rem 0 .15rem 1rem;
+  position: relative;
+}
+
+.changelog-item::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+}
+
 /* ── Main Content ── */
 
 .main {

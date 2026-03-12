@@ -445,6 +445,7 @@
             <a href="#" id="logout-btn">
               <span class="nav-icon">\uD83D\uDEAA</span>Odhlásit se
             </a>
+            <div class="sidebar-version" id="sidebar-version"></div>
           </div>
         </aside>
         <main class="main">
@@ -478,6 +479,16 @@
     });
 
     document.getElementById("logout-btn").addEventListener("click", handleLogout);
+
+    // Load version badge
+    fetch("/version.json").then(r => r.json()).then(data => {
+      const el = document.getElementById("sidebar-version");
+      if (el && data.version) {
+        el.textContent = "v" + data.version;
+        el.style.cursor = "pointer";
+        el.addEventListener("click", () => showChangelog());
+      }
+    }).catch(() => {});
 
     // Burger menu toggle
     const burger = document.getElementById("burger-btn");
@@ -4039,6 +4050,34 @@
       });
     } catch (err) {
       container.innerHTML = `<div class="placeholder-msg">Chyba při načítání nastavení</div>`;
+    }
+  }
+
+  // ── Changelog modal ──
+  async function showChangelog() {
+    try {
+      const data = await (await fetch("/version.json")).json();
+      if (!data.changelog) throw new Error();
+      // Simple markdown → HTML: headings and list items
+      const html = data.changelog.split("\n").map(function(line) {
+        if (line.startsWith("## ")) return '<h3 class="changelog-version">' + esc(line.slice(3)) + "</h3>";
+        if (line.startsWith("- ")) return '<div class="changelog-item">' + esc(line.slice(2)) + "</div>";
+        return "";
+      }).join("\n");
+
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.innerHTML =
+        '<div class="modal changelog-modal">' +
+          '<h2 class="changelog-title">Changelog</h2>' +
+          '<div class="changelog-content">' + html + '</div>' +
+          '<div class="modal-btns"><button class="btn-primary" data-action="ok">Zavřít</button></div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      overlay.querySelector('[data-action="ok"]').addEventListener("click", () => overlay.remove());
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+    } catch {
+      showToast("Changelog se nepodařilo načíst", "error");
     }
   }
 
