@@ -55,8 +55,8 @@ case "${1:-help}" in
       });
     ")
     npx wrangler d1 execute "$DB_NAME" --local \
-      --command "INSERT INTO admins (username, password_hash, role) VALUES ('$ADM_USER_LOWER', '$HASH', '$ADM_ROLE')"
-    echo "Admin user '$ADM_USER_LOWER' created with role '$ADM_ROLE'."
+      --command "INSERT INTO admins (username, password_hash, role) VALUES ('$ADM_USER_LOWER', '$HASH', '$ADM_ROLE') ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, role = excluded.role"
+    echo "Admin user '$ADM_USER_LOWER' created/updated with role '$ADM_ROLE'."
     ;;
   create-admin:prod)
     echo "Creating admin user on PRODUCTION..."
@@ -92,8 +92,8 @@ case "${1:-help}" in
       });
     ")
     npx wrangler d1 execute "$DB_NAME" --remote \
-      --command "INSERT INTO admins (username, password_hash, role) VALUES ('$ADM_USER_LOWER', '$HASH', '$ADM_ROLE')"
-    echo "Admin user '$ADM_USER_LOWER' created on production with role '$ADM_ROLE'."
+      --command "INSERT INTO admins (username, password_hash, role) VALUES ('$ADM_USER_LOWER', '$HASH', '$ADM_ROLE') ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, role = excluded.role"
+    echo "Admin user '$ADM_USER_LOWER' created/updated on production with role '$ADM_ROLE'."
     ;;
   db:snapshot:prod)
     SNAP_DIR="snapshots"
