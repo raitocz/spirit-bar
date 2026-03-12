@@ -1524,7 +1524,12 @@
         : "";
       let cellHtml = `<span class="shift-chip${isSelf ? " shift-chip--self" : ""}" style="${chipStyle}">${esc(assigned.username)}`;
       if (isSelf) {
-        cellHtml += ` <button class="shift-chip-remove shift-self-unassign" data-date="${day.date}" data-position="${position}">&times;</button>`;
+        const now = new Date();
+        const lockDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+        const lockStr = lockDate.toISOString().slice(0, 10);
+        if (day.date > lockStr) {
+          cellHtml += ` <button class="shift-chip-remove shift-self-unassign" data-date="${day.date}" data-position="${position}">&times;</button>`;
+        }
       }
       cellHtml += `</span>`;
       return cellHtml;
@@ -3334,15 +3339,15 @@
             return `
             <tr data-user-id="${u.id}">
               <td class="users-username">${esc(u.username)}</td>
-              <td class="users-date">${u.email ? esc(u.email) : '<span style="color:var(--muted);">—</span>'}</td>
-              <td>
+              <td class="users-date" data-label="Email">${u.email ? esc(u.email) : '<span style="color:var(--muted);">—</span>'}</td>
+              <td data-label="Role">
                 <select class="role-select role-select--${u.role}" data-user-id="${u.id}" data-current="${u.role}">
                   <option value="admin"${u.role === "admin" ? " selected" : ""}>Admin</option>
                   <option value="quizmaster"${u.role === "quizmaster" ? " selected" : ""}>Quizmaster</option>
                   <option value="staff"${u.role === "staff" ? " selected" : ""}>Staff</option>
                 </select>
               </td>
-              <td>
+              <td data-label="Typ">
                 ${u.role === "staff" || u.role === "admin"
                   ? `<select class="role-select staff-type-select" data-user-id="${u.id}" data-current="${u.staff_type || ""}">
                       <option value=""${!u.staff_type ? " selected" : ""}>—</option>
@@ -3352,17 +3357,17 @@
                     </select>`
                   : `<span style="color:var(--muted);">—</span>`}
               </td>
-              <td>
+              <td data-label="Barva">
                 <label class="color-swatch" style="background:${u.color || '#666'}">
                   <input type="color" class="user-color-input" data-user-id="${u.id}" value="${u.color || '#666666'}">
                 </label>
               </td>
-              <td>
+              <td data-label="Stav">
                 ${isPending
                   ? `<span class="role-badge" style="background:rgba(224,160,48,.15);color:#e0a030;">Čeká na heslo</span>`
                   : `<span class="role-badge" style="background:rgba(52,211,153,.15);color:#34d399;">Aktivní</span>`}
               </td>
-              <td class="users-date">${u.created_at ? new Date(u.created_at).toLocaleDateString("cs-CZ") : "–"}</td>
+              <td class="users-date" data-label="Vytvořen">${u.created_at ? new Date(u.created_at).toLocaleDateString("cs-CZ") : "–"}</td>
               <td style="white-space:nowrap;">
                 ${isPending ? `<button class="btn-small btn-edit" data-reinvite-user="${u.id}" style="margin-right:.3rem;">Poslat znovu</button>` : ""}
                 ${!isPending && u.username !== currentUser ? `<button class="btn-small btn-secondary" data-force-logout="${u.id}" style="margin-right:.3rem;">Odhlásit</button>` : ""}

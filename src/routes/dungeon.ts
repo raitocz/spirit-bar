@@ -1273,10 +1273,19 @@ dungeon.put("/api/shifts/:date/self-assign", async (c) => {
     .bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
 
   // Staff cannot modify past/today shifts
+  // Staff also cannot remove themselves from shifts within the next 7 days
   if (currentUser.role === "staff") {
     const today = new Date().toISOString().slice(0, 10);
     if (date <= today) {
       return c.json({ error: "Nemůžeš měnit směny, které už proběhly nebo probíhají" }, 400);
+    }
+    if (body.remove) {
+      const now = new Date();
+      const lockDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+      const lockStr = lockDate.toISOString().slice(0, 10);
+      if (date <= lockStr) {
+        return c.json({ error: "Nemůžeš se odebrat ze směny v následujících 7 dnech" }, 400);
+      }
     }
   }
 

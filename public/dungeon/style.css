@@ -3258,3 +3258,142 @@ body {
   .shift-day > .shift-duration { display: inline; }
   .shift-mobile-time-hide { display: none; }
 }
+
+/* ── Responsive: non-shift sections ── */
+
+@media (max-width: 640px) {
+  /* Form rows → stack vertically */
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Gallery / quiz cards → stack body + actions */
+  .gallery-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 1rem 1.2rem;
+    gap: .6rem;
+  }
+
+  .gallery-card-actions {
+    justify-content: flex-start;
+  }
+
+  .gallery-card-desc {
+    white-space: normal;
+  }
+
+  /* Gallery detail header */
+  .gallery-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .6rem;
+  }
+
+  /* Users table → card layout */
+  .users-table thead { display: none; }
+  .users-table,
+  .users-table tbody,
+  .users-table tr,
+  .users-table td { display: block; width: 100%; }
+
+  .users-table tr {
+    background: var(--dark2);
+    border: 1px solid rgba(0,207,255,.08);
+    border-radius: var(--radius);
+    margin-bottom: .5rem;
+    padding: .85rem 1rem;
+  }
+
+  .users-table tr:hover td {
+    background: transparent;
+  }
+
+  .users-table td {
+    padding: .25rem 0;
+    border-bottom: none;
+  }
+
+  .users-table td:empty { display: none; }
+
+  /* Username as card header */
+  .users-table td:first-child {
+    font-size: 1rem;
+    padding-bottom: .4rem;
+  }
+
+  /* Inline labels via data-label */
+  .users-table td[data-label]::before {
+    content: attr(data-label) ": ";
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--muted);
+    margin-right: .4rem;
+  }
+
+  .users-table td[data-label] {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+  }
+
+  /* Action buttons row */
+  .users-table td:last-child {
+    padding-top: .5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+
+  /* Team row: hide email, show name prominently */
+  .team-row-summary {
+    flex-wrap: wrap;
+    gap: .4rem .6rem;
+    padding: .65rem 1rem;
+  }
+
+  .team-row-meta {
+    display: none;
+  }
+
+  .team-row-name {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* Team detail actions */
+  .team-card-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .6rem;
+  }
+
+  /* Settings card */
+  .settings-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .6rem;
+  }
+
+  .settings-card-body {
+    padding: 1rem 1.2rem;
+  }
+
+  /* Mail card padding */
+  .mail-card-header {
+    padding: .85rem 1.2rem;
+  }
+
+  /* Toolbar buttons */
+  .gallery-toolbar,
+  .mail-toolbar {
+    flex-wrap: wrap;
+  }
+
+  /* Gallery form padding */
+  .gallery-form {
+    padding: 1.2rem;
+  }
+}
