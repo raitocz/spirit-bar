@@ -70,6 +70,7 @@ const navLinks: { href: string; label: string }[] = [
   { href: "/#contact", label: "Kontakt" },
   { href: "/galerie", label: "Galerie" },
   { href: "/kviz", label: "Kvíz" },
+  { href: "/akce", label: "Akce" },
 ];
 
 function prefixHref(href: string, prefix: string): string {
@@ -86,7 +87,12 @@ export function pageShell(opts: PageOptions): string {
     .map(
       (l) => {
         const href = prefixHref(l.href, lp);
-        return `<li><a href="${href}"${l.href === opts.activePage ? ' class="active"' : ""}>${l.label}</a></li>`;
+        const isPage = !l.href.startsWith("/#");
+        const classes = [
+          isPage ? "nav-page" : "",
+          l.href === opts.activePage ? "active" : "",
+        ].filter(Boolean).join(" ");
+        return `<li><a href="${href}"${classes ? ` class="${classes}"` : ""}>${l.label}</a></li>`;
       }
     )
     .join("\n      ");

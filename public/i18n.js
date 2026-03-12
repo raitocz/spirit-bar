@@ -30,6 +30,7 @@
     "nav.contact": "Kontakt",
     "nav.galerie": "Galerie",
     "nav.quiz": "Kv\u00edz",
+    "nav.akce": "Akce",
 
     // Hero
     "hero.sr_title": "SPiRiT Teplice \u2013 Bar, Hookah Lounge a Coffee | \u0160koln\u00ed 605/18, 415 01 Teplice",
@@ -200,6 +201,7 @@
     "nav.contact": "Contact",
     "nav.galerie": "Gallery",
     "nav.quiz": "Quiz",
+    "nav.akce": "Events",
 
     "hero.sr_title": "SPiRiT Teplice \u2013 Bar, Hookah Lounge & Coffee | Skolni 605/18, 415 01 Teplice",
     "hero.tag": "Teplice \u00a0\u00b7\u00a0 Skolni 605/18",
@@ -358,6 +360,7 @@
     "nav.contact": "Kontakt",
     "nav.galerie": "Galerie",
     "nav.quiz": "Quiz",
+    "nav.akce": "Veranstaltungen",
 
     "hero.sr_title": "SPiRiT Teplice \u2013 Bar, Hookah Lounge & Coffee | Skolni 605/18, 415 01 Teplice",
     "hero.tag": "Teplice \u00a0\u00b7\u00a0 Skolni 605/18",
@@ -516,6 +519,7 @@
     "nav.contact": "Kontakt",
     "nav.galerie": "Galeria",
     "nav.quiz": "Quiz",
+    "nav.akce": "Wydarzenia",
 
     "hero.sr_title": "SPiRiT Teplice \u2013 Bar, Hookah Lounge & Coffee | Skolni 605/18, 415 01 Teplice",
     "hero.tag": "Teplice \u00a0\u00b7\u00a0 Skolni 605/18",
@@ -674,6 +678,7 @@
     "nav.contact": "Slide Into DMs",
     "nav.galerie": "Aesthetic Dump",
     "nav.quiz": "Brain Rot Quiz",
+    "nav.akce": "Lore Drops",
 
     "hero.sr_title": "SPiRiT Teplice \u2013 The Most Sigma Bar in the Czech Republic, no cap",
     "hero.tag": "Teplice \u00a0\u00b7\u00a0 Main Character Location",
@@ -836,6 +841,7 @@
     ['.nav-links a[href*="contact"]',     "nav.contact"],
     ['.nav-links a[href*="galerie"]',     "nav.galerie"],
     ['.nav-links a[href*="kviz"]',        "nav.quiz"],
+    ['.nav-links a[href*="akce"]',        "nav.akce"],
 
     // HERO
     [".hero-content .sr-only",   "hero.sr_title"],

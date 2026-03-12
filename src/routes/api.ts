@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { sendEmail, quizRegistrationEmail } from "../lib/email";
+import { sendEmail, quizRegistrationEmail, quizAdminNotificationEmail } from "../lib/email";
 
 type Bindings = {
   DB: D1Database;
@@ -216,8 +216,20 @@ api.post("/quizzes/:id/register", async (c) => {
       members,
       email: body.email!.trim().toLowerCase(),
     });
+    const adminMsg = quizAdminNotificationEmail({
+      quizNumber: quiz.quiz_number,
+      date: quiz.date,
+      price: quiz.price,
+      teamName: trimmedName,
+      icon,
+      members,
+      email: body.email!.trim().toLowerCase(),
+    });
     c.executionCtx.waitUntil(
-      sendEmail(c.env, emailMsg).catch(() => {})
+      Promise.all([
+        sendEmail(c.env, emailMsg).catch(() => {}),
+        sendEmail(c.env, adminMsg).catch(() => {}),
+      ])
     );
   } catch {
     // never fail registration due to email error
@@ -255,6 +267,17 @@ api.get("/galleries", async (c) => {
      LIMIT 200`
   ).all();
   return c.json(galleries);
+});
+
+// ── Public events ──
+
+api.get("/events", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, date, date_to, time, title, description, cover_r2_key, cover_thumb_r2_key, entry_fee,
+            has_competitions, has_special_drinks, has_costume_reward, has_tasting, linked_quiz_id
+     FROM events ORDER BY date ASC, time ASC`
+  ).all();
+  return c.json(results);
 });
 
 api.get("/galleries/:id", async (c) => {

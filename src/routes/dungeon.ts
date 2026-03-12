@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { hashPassword, verifyPassword, signJwt, verifyJwt } from "../lib/auth";
-import { getMailbox, clearMailbox, sendEmail, quizConfirmationEmail, adminInviteEmail } from "../lib/email";
+import { getMailbox, clearMailbox, sendEmail, quizConfirmationEmail, adminInviteEmail, monthlyShiftSummaryEmail } from "../lib/email";
 import { errorPage } from "../lib/layout";
 
 type Bindings = {
@@ -57,8 +57,8 @@ function pickColor(usedColors: string[]): string {
 dungeon.get("/photos/:key{.+}", async (c) => {
   const key = c.req.param("key");
 
-  // Prevent path traversal — only allow keys under galleries/
-  if (!key.startsWith("galleries/") || key.includes("..")) {
+  // Prevent path traversal — only allow known prefixes
+  if ((!key.startsWith("galleries/") && !key.startsWith("events/")) || key.includes("..")) {
     return c.html(errorPage(403), 403);
   }
 
@@ -114,6 +114,27 @@ function cleanupRateLimits(): void {
 
 // ── API routes ──
 
+function setSessionCookie(c: any, token: string, remember: boolean) {
+  const maxAge = remember ? 365 * 24 * 60 * 60 : undefined; // 1 year or session
+  const isSecure = new URL(c.req.url).protocol === "https:";
+  c.header("Set-Cookie",
+    `session=${token}; Path=/dungeon; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}${maxAge ? `; Max-Age=${maxAge}` : ""}`
+  );
+}
+
+function clearSessionCookie(c: any) {
+  const isSecure = new URL(c.req.url).protocol === "https:";
+  c.header("Set-Cookie",
+    `session=; Path=/dungeon; HttpOnly; SameSite=Lax${isSecure ? "; Secure" : ""}; Max-Age=0`
+  );
+}
+
+function getCookieToken(c: any): string | null {
+  const cookies = c.req.header("cookie") || "";
+  const match = cookies.match(/(?:^|;\s*)session=([^\s;]+)/);
+  return match ? match[1] : null;
+}
+
 dungeon.post("/api/login", async (c) => {
   cleanupRateLimits();
   const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
@@ -122,16 +143,16 @@ dungeon.post("/api/login", async (c) => {
     return c.json({ error: "too many login attempts, try again later" }, 429);
   }
 
-  const body = await c.req.json<{ username?: string; password?: string }>();
+  const body = await c.req.json<{ username?: string; password?: string; remember?: boolean }>();
   if (!body.username || !body.password) {
     return c.json({ error: "username and password are required" }, 400);
   }
 
   const row = await c.env.DB.prepare(
-    "SELECT id, username, password_hash, role FROM admins WHERE username = ?"
+    "SELECT id, username, password_hash, role, session_version FROM admins WHERE username = ?"
   )
     .bind(body.username.trim().toLowerCase())
-    .first<{ id: number; username: string; password_hash: string; role: string }>();
+    .first<{ id: number; username: string; password_hash: string; role: string; session_version: number }>();
 
   if (!row || !(await verifyPassword(body.password, row.password_hash))) {
     recordLoginAttempt(ip);
@@ -140,15 +161,19 @@ dungeon.post("/api/login", async (c) => {
 
   clearLoginAttempts(ip);
 
+  const expiresIn = body.remember ? 365 * 24 * 60 * 60 : 24 * 60 * 60;
   const token = await signJwt(
-    { sub: row.id, username: row.username, role: row.role },
-    c.env.JWT_SECRET
+    { sub: row.id, username: row.username, role: row.role, sv: row.session_version },
+    c.env.JWT_SECRET,
+    expiresIn
   );
 
-  return c.json({ id: row.id, username: row.username, role: row.role, token });
+  setSessionCookie(c, token, !!body.remember);
+  return c.json({ id: row.id, username: row.username, role: row.role });
 });
 
 dungeon.post("/api/logout", (c) => {
+  clearSessionCookie(c);
   return c.json({ ok: true });
 });
 
@@ -217,13 +242,14 @@ dungeon.post("/api/setup-password", async (c) => {
     .bind(passwordHash, user.id)
     .run();
 
-  // Auto-login: create JWT
+  // Auto-login: create JWT + set cookie
   const jwt = await signJwt(
-    { sub: user.id, username: user.username, role: user.role },
+    { sub: user.id, username: user.username, role: user.role, sv: 1 },
     c.env.JWT_SECRET
   );
 
-  return c.json({ username: user.username, role: user.role, token: jwt });
+  setSessionCookie(c, jwt, false);
+  return c.json({ username: user.username, role: user.role });
 });
 
 // ── Auth middleware for all API routes except login ──
@@ -234,17 +260,20 @@ dungeon.use("/api/*", async (c, next) => {
     c.req.path === "/dungeon/api/logout" ||
     c.req.path === "/dungeon/api/setup-password"
   ) return next();
-  const auth = c.req.header("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  const token = getCookieToken(c);
   if (!token) return c.json({ error: "not authenticated" }, 401);
   const payload = await verifyJwt(token, c.env.JWT_SECRET);
   if (!payload) return c.json({ error: "invalid session" }, 401);
 
-  // Re-validate user exists and get current role from DB (prevents stale JWT role)
-  const dbUser = await c.env.DB.prepare("SELECT role FROM admins WHERE id = ? AND password_hash != 'invite_pending'")
+  // Re-validate user exists, get current role, and check session_version
+  const dbUser = await c.env.DB.prepare("SELECT role, session_version FROM admins WHERE id = ? AND password_hash != 'invite_pending'")
     .bind(payload.sub)
-    .first<{ role: string }>();
+    .first<{ role: string; session_version: number }>();
   if (!dbUser) return c.json({ error: "user no longer exists" }, 401);
+  if (payload.sv !== undefined && payload.sv !== dbUser.session_version) {
+    clearSessionCookie(c);
+    return c.json({ error: "session invalidated" }, 401);
+  }
   payload.role = dbUser.role;
 
   c.set("user" as never, payload);
@@ -948,6 +977,17 @@ dungeon.post("/api/users", async (c) => {
   return c.json(row, 201);
 });
 
+dungeon.post("/api/users/:id/force-logout", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const id = Number(c.req.param("id"));
+  const { meta } = await c.env.DB.prepare(
+    "UPDATE admins SET session_version = session_version + 1 WHERE id = ?"
+  ).bind(id).run();
+  if (!meta.changes) return c.json({ error: "user not found" }, 404);
+  return c.json({ ok: true });
+});
+
 dungeon.post("/api/users/:id/reinvite", async (c) => {
   const denied = requireRole(c, "admin");
   if (denied) return denied;
@@ -1048,7 +1088,7 @@ dungeon.get("/api/shifts/staff", async (c) => {
   const denied = requireRole(c, "admin", "staff");
   if (denied) return denied;
   const { results } = await c.env.DB.prepare(
-    "SELECT id, username, staff_type, color FROM admins WHERE role IN ('admin', 'staff') AND password_hash != 'invite_pending' ORDER BY username"
+    "SELECT id, username, staff_type, color FROM admins WHERE role IN ('admin', 'staff') ORDER BY username"
   ).all();
   return c.json(results);
 });
@@ -1182,12 +1222,32 @@ dungeon.put("/api/shifts/:date", async (c) => {
     if (h) return c.json({ error: "Tento člověk je na tento den zapsaný jako výpomoc" }, 400);
   }
 
+  // Check who was previously assigned – remove their shift_logs if unassigned
+  const prev = await c.env.DB.prepare("SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?")
+    .bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
+
+  const removedUserIds: number[] = [];
+  if (prev) {
+    if (prev.hookah_user_id && prev.hookah_user_id !== (body.hookah_user_id ?? null)) {
+      removedUserIds.push(prev.hookah_user_id);
+    }
+    if (prev.bar_user_id && prev.bar_user_id !== (body.bar_user_id ?? null)) {
+      removedUserIds.push(prev.bar_user_id);
+    }
+  }
+
   // Upsert
   await c.env.DB.prepare(
     `INSERT INTO shifts (date, hookah_user_id, bar_user_id)
      VALUES (?, ?, ?)
      ON CONFLICT(date) DO UPDATE SET hookah_user_id = excluded.hookah_user_id, bar_user_id = excluded.bar_user_id`
   ).bind(date, body.hookah_user_id ?? null, body.bar_user_id ?? null).run();
+
+  // Delete shift logs for removed users
+  for (const uid of removedUserIds) {
+    await c.env.DB.prepare("DELETE FROM shift_logs WHERE date = ? AND user_id = ?")
+      .bind(date, uid).run();
+  }
 
   return c.json({ ok: true });
 });
@@ -1211,6 +1271,14 @@ dungeon.put("/api/shifts/:date/self-assign", async (c) => {
   // Get current shift to preserve the other position
   const existing = await c.env.DB.prepare("SELECT hookah_user_id, bar_user_id FROM shifts WHERE date = ?")
     .bind(date).first<{ hookah_user_id: number | null; bar_user_id: number | null }>();
+
+  // Staff cannot modify past/today shifts
+  if (currentUser.role === "staff") {
+    const today = new Date().toISOString().slice(0, 10);
+    if (date <= today) {
+      return c.json({ error: "Nemůžeš měnit směny, které už proběhly nebo probíhají" }, 400);
+    }
+  }
 
   if (body.remove) {
     // Can only remove self
@@ -1279,6 +1347,14 @@ dungeon.put("/api/shifts/:date/availability", async (c) => {
   // Staff can only set their own availability
   if (currentUser.role === "staff" && currentUser.sub !== body.user_id) {
     return c.json({ error: "forbidden" }, 403);
+  }
+
+  // Staff cannot modify availability for past/today shifts
+  if (currentUser.role === "staff") {
+    const today = new Date().toISOString().slice(0, 10);
+    if (date <= today) {
+      return c.json({ error: "Nemůžeš měnit dostupnost u směn, které už proběhly nebo probíhají" }, 400);
+    }
   }
 
   // Check if user is already assigned to a shift (hookah/bar/helper) this day
@@ -1432,6 +1508,342 @@ dungeon.post("/api/shift-logs", async (c) => {
   ).bind(body.date, userId, body.time_from, body.time_to, body.note?.trim() || "").run();
 
   return c.json({ ok: true });
+});
+
+// ── Shift Overview ──
+
+dungeon.get("/api/shifts/overview", async (c) => {
+  const denied = requireRole(c, "admin", "staff");
+  if (denied) return denied;
+
+  const authUser = (c.get as any)("user");
+  const isAdmin = authUser.role === "admin";
+  let targetUserId = authUser.sub;
+
+  // Admin can view any user's overview
+  const qUserId = c.req.query("user_id");
+  if (qUserId) {
+    if (!isAdmin) return c.json({ error: "forbidden" }, 403);
+    targetUserId = Number(qUserId);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Upcoming shifts: next 10 days (today inclusive), where user is assigned
+  const futureLimit = new Date();
+  futureLimit.setDate(futureLimit.getDate() + 10);
+  const futureLimitStr = futureLimit.toISOString().slice(0, 10);
+
+  const [
+    { results: upcomingShifts },
+    { results: upcomingHelper },
+    { results: pastShifts },
+    { results: pastHelper },
+    { results: logs },
+    wageRow,
+  ] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT s.date,
+              CASE WHEN s.hookah_user_id = ? THEN 'hookah' ELSE 'bar' END as position
+       FROM shifts s
+       WHERE s.date >= ? AND s.date <= ?
+         AND (s.hookah_user_id = ? OR s.bar_user_id = ?)
+       ORDER BY s.date ASC`
+    ).bind(targetUserId, today, futureLimitStr, targetUserId, targetUserId).all(),
+    c.env.DB.prepare(
+      `SELECT date FROM shift_availability
+       WHERE user_id = ? AND status = 'helper' AND date >= ? AND date <= ?
+       ORDER BY date ASC`
+    ).bind(targetUserId, today, futureLimitStr).all(),
+    c.env.DB.prepare(
+      `SELECT s.date,
+              CASE WHEN s.hookah_user_id = ? THEN 'hookah' ELSE 'bar' END as position
+       FROM shifts s
+       WHERE s.date < ?
+         AND (s.hookah_user_id = ? OR s.bar_user_id = ?)
+       ORDER BY s.date DESC`
+    ).bind(targetUserId, today, targetUserId, targetUserId).all(),
+    c.env.DB.prepare(
+      `SELECT date FROM shift_availability
+       WHERE user_id = ? AND status = 'helper' AND date < ?
+       ORDER BY date DESC`
+    ).bind(targetUserId, today).all(),
+    c.env.DB.prepare(
+      `SELECT date, time_from, time_to, note FROM shift_logs
+       WHERE user_id = ? ORDER BY date DESC`
+    ).bind(targetUserId).all(),
+    c.env.DB.prepare("SELECT value FROM settings WHERE key = 'hourly_wage'").first<{ value: string }>(),
+  ]);
+
+  // Merge upcoming
+  const upcoming: any[] = [];
+  for (const s of upcomingShifts as any[]) {
+    upcoming.push({ date: s.date, position: s.position });
+  }
+  for (const h of upcomingHelper as any[]) {
+    if (!upcoming.find((u: any) => u.date === h.date)) {
+      upcoming.push({ date: (h as any).date, position: "helper" });
+    }
+  }
+  upcoming.sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+  // Merge past
+  const past: any[] = [];
+  const logsMap = new Map<string, any>();
+  for (const l of logs as any[]) logsMap.set(l.date, l);
+
+  for (const s of pastShifts as any[]) {
+    past.push({ date: s.date, position: s.position, log: logsMap.get(s.date) || null });
+  }
+  for (const h of pastHelper as any[]) {
+    if (!past.find((p: any) => p.date === (h as any).date)) {
+      past.push({ date: (h as any).date, position: "helper", log: logsMap.get((h as any).date) || null });
+    }
+  }
+  past.sort((a: any, b: any) => a.date.localeCompare(b.date));
+
+  // Summary: count from logged shifts
+  let totalShifts = 0;
+  let totalMinutes = 0;
+  for (const l of logs as any[]) {
+    totalShifts++;
+    const [fH, fM] = l.time_from.split(":").map(Number);
+    const [tH, tM] = l.time_to.split(":").map(Number);
+    let mins = (tH * 60 + tM) - (fH * 60 + fM);
+    if (mins <= 0) mins += 1440;
+    totalMinutes += mins;
+  }
+
+  const hourlyWage = wageRow ? Number(wageRow.value) : 0;
+
+  return c.json({
+    upcoming,
+    past,
+    summary: {
+      total_shifts: totalShifts,
+      total_hours: Math.round(totalMinutes / 6) / 10, // 1 decimal
+      total_earnings: hourlyWage > 0 ? Math.round((totalMinutes / 60) * hourlyWage) : null,
+      hourly_wage: hourlyWage,
+    },
+  });
+});
+
+// ── Events (Kalendář akcí) ──
+
+dungeon.get("/api/events/month/:year/:month", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const year = Number(c.req.param("year"));
+  const month = Number(c.req.param("month"));
+  if (!year || !month || month < 1 || month > 12) {
+    return c.json({ error: "invalid year/month" }, 400);
+  }
+  const prefix = `${year}-${String(month).padStart(2, "0")}-%`;
+  const { results } = await c.env.DB.prepare(
+    "SELECT id, date, date_to, time, title, entry_fee, has_competitions, has_special_drinks, has_costume_reward, has_tasting, cover_r2_key, cover_thumb_r2_key FROM events WHERE date LIKE ? ORDER BY date, time"
+  ).bind(prefix).all();
+  return c.json(results);
+});
+
+dungeon.get("/api/events/:id", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const id = Number(c.req.param("id"));
+  const event = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
+  if (!event) return c.json({ error: "event not found" }, 404);
+  return c.json(event);
+});
+
+dungeon.post("/api/events", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+
+  const formData = await c.req.formData();
+  const date = formData.get("date") as string;
+  const dateTo = (formData.get("date_to") as string) || null;
+  const time = formData.get("time") as string;
+  const title = formData.get("title") as string;
+  const description = (formData.get("description") as string) || "";
+  const entryFee = Number(formData.get("entry_fee") || 0);
+  const hasCompetitions = formData.get("has_competitions") === "1" ? 1 : 0;
+  const hasSpecialDrinks = formData.get("has_special_drinks") === "1" ? 1 : 0;
+  const hasCostumeReward = formData.get("has_costume_reward") === "1" ? 1 : 0;
+  const hasTasting = formData.get("has_tasting") === "1" ? 1 : 0;
+  const linkedQuizId = Number(formData.get("linked_quiz_id") || 0) || null;
+
+  if (!date || !isValidDate(date)) return c.json({ error: "invalid date" }, 400);
+  if (dateTo && !isValidDate(dateTo)) return c.json({ error: "invalid date_to" }, 400);
+  if (dateTo && dateTo <= date) return c.json({ error: "date_to must be after date" }, 400);
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return c.json({ error: "invalid time" }, 400);
+  if (!title || !title.trim()) return c.json({ error: "title is required" }, 400);
+
+  // Handle optional cover image
+  let coverR2Key: string | null = null;
+  let coverThumbR2Key: string | null = null;
+  let coverWidth: number | null = null;
+  let coverHeight: number | null = null;
+  const coverFile = formData.get("cover") as File | null;
+
+  if (coverFile && coverFile.size > 0) {
+    const allowedTypes = ["image/webp", "image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(coverFile.type)) {
+      return c.json({ error: "invalid image type" }, 400);
+    }
+    if (coverFile.size > 5 * 1024 * 1024) {
+      return c.json({ error: "image too large (max 5 MB)" }, 413);
+    }
+    const ab = await coverFile.arrayBuffer();
+    const uuid = crypto.randomUUID();
+    coverR2Key = `events/${uuid}.webp`;
+    coverWidth = Number(formData.get("cover_width") || 0);
+    coverHeight = Number(formData.get("cover_height") || 0);
+
+    const uploads: Promise<any>[] = [
+      c.env.PHOTOS.put(coverR2Key, ab, { httpMetadata: { contentType: "image/webp" } }),
+    ];
+
+    const thumbFile = formData.get("cover_thumb") as File | null;
+    if (thumbFile && thumbFile.size > 0) {
+      coverThumbR2Key = `events/${uuid}_thumb.webp`;
+      uploads.push(c.env.PHOTOS.put(coverThumbR2Key, await thumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }));
+    }
+
+    await Promise.all(uploads);
+  }
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO events (date, date_to, time, title, description, cover_r2_key, cover_thumb_r2_key, cover_width, cover_height, entry_fee, has_competitions, has_special_drinks, has_costume_reward, has_tasting, linked_quiz_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(date, dateTo, time, title.trim(), description.trim(), coverR2Key, coverThumbR2Key, coverWidth, coverHeight, entryFee, hasCompetitions, hasSpecialDrinks, hasCostumeReward, hasTasting, linkedQuizId).run();
+
+  const row = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(result.meta.last_row_id).first();
+  return c.json(row, 201);
+});
+
+dungeon.put("/api/events/:id", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const id = Number(c.req.param("id"));
+
+  const existing = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first<any>();
+  if (!existing) return c.json({ error: "event not found" }, 404);
+
+  const formData = await c.req.formData();
+  const date = formData.get("date") as string;
+  const dateTo = (formData.get("date_to") as string) || null;
+  const time = formData.get("time") as string;
+  const title = formData.get("title") as string;
+  const description = (formData.get("description") as string) || "";
+  const entryFee = Number(formData.get("entry_fee") || 0);
+  const hasCompetitions = formData.get("has_competitions") === "1" ? 1 : 0;
+  const hasSpecialDrinks = formData.get("has_special_drinks") === "1" ? 1 : 0;
+  const hasCostumeReward = formData.get("has_costume_reward") === "1" ? 1 : 0;
+  const hasTasting = formData.get("has_tasting") === "1" ? 1 : 0;
+  const linkedQuizId = Number(formData.get("linked_quiz_id") || 0) || null;
+
+  if (!date || !isValidDate(date)) return c.json({ error: "invalid date" }, 400);
+  if (dateTo && !isValidDate(dateTo)) return c.json({ error: "invalid date_to" }, 400);
+  if (dateTo && dateTo <= date) return c.json({ error: "date_to must be after date" }, 400);
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return c.json({ error: "invalid time" }, 400);
+  if (!title || !title.trim()) return c.json({ error: "title is required" }, 400);
+
+  let coverR2Key = existing.cover_r2_key;
+  let coverThumbR2Key = existing.cover_thumb_r2_key;
+  let coverWidth = existing.cover_width;
+  let coverHeight = existing.cover_height;
+
+  const coverFile = formData.get("cover") as File | null;
+  const removeCover = formData.get("remove_cover") === "1";
+
+  if (removeCover && coverR2Key) {
+    const deletes: Promise<any>[] = [c.env.PHOTOS.delete(coverR2Key)];
+    if (coverThumbR2Key) deletes.push(c.env.PHOTOS.delete(coverThumbR2Key));
+    await Promise.all(deletes);
+    coverR2Key = null;
+    coverThumbR2Key = null;
+    coverWidth = null;
+    coverHeight = null;
+  }
+
+  if (coverFile && coverFile.size > 0) {
+    const allowedTypes = ["image/webp", "image/jpeg", "image/png", "image/gif"];
+    if (!allowedTypes.includes(coverFile.type)) {
+      return c.json({ error: "invalid image type" }, 400);
+    }
+    if (coverFile.size > 5 * 1024 * 1024) {
+      return c.json({ error: "image too large (max 5 MB)" }, 413);
+    }
+    // Delete old cover + thumb
+    const oldDeletes: Promise<any>[] = [];
+    if (existing.cover_r2_key) oldDeletes.push(c.env.PHOTOS.delete(existing.cover_r2_key));
+    if (existing.cover_thumb_r2_key) oldDeletes.push(c.env.PHOTOS.delete(existing.cover_thumb_r2_key));
+    if (oldDeletes.length) await Promise.all(oldDeletes);
+
+    const ab = await coverFile.arrayBuffer();
+    const uuid = crypto.randomUUID();
+    coverR2Key = `events/${uuid}.webp`;
+    coverWidth = Number(formData.get("cover_width") || 0);
+    coverHeight = Number(formData.get("cover_height") || 0);
+
+    const uploads: Promise<any>[] = [
+      c.env.PHOTOS.put(coverR2Key, ab, { httpMetadata: { contentType: "image/webp" } }),
+    ];
+
+    const thumbFile = formData.get("cover_thumb") as File | null;
+    coverThumbR2Key = null;
+    if (thumbFile && thumbFile.size > 0) {
+      coverThumbR2Key = `events/${uuid}_thumb.webp`;
+      uploads.push(c.env.PHOTOS.put(coverThumbR2Key, await thumbFile.arrayBuffer(), { httpMetadata: { contentType: "image/webp" } }));
+    }
+
+    await Promise.all(uploads);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE events SET date=?, date_to=?, time=?, title=?, description=?, cover_r2_key=?, cover_thumb_r2_key=?, cover_width=?, cover_height=?, entry_fee=?, has_competitions=?, has_special_drinks=?, has_costume_reward=?, has_tasting=?, linked_quiz_id=? WHERE id=?`
+  ).bind(date, dateTo, time, title.trim(), description.trim(), coverR2Key, coverThumbR2Key, coverWidth, coverHeight, entryFee, hasCompetitions, hasSpecialDrinks, hasCostumeReward, hasTasting, linkedQuizId, id).run();
+
+  const row = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
+  return c.json(row);
+});
+
+dungeon.delete("/api/events/:id", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+  const id = Number(c.req.param("id"));
+
+  const event = await c.env.DB.prepare("SELECT cover_r2_key, cover_thumb_r2_key FROM events WHERE id = ?").bind(id).first<{ cover_r2_key: string | null; cover_thumb_r2_key: string | null }>();
+  if (!event) return c.json({ error: "event not found" }, 404);
+
+  const deletes: Promise<any>[] = [];
+  if (event.cover_r2_key) deletes.push(c.env.PHOTOS.delete(event.cover_r2_key));
+  if (event.cover_thumb_r2_key) deletes.push(c.env.PHOTOS.delete(event.cover_thumb_r2_key));
+  if (deletes.length) await Promise.all(deletes);
+
+  await c.env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
+  return c.json({ ok: true });
+});
+
+// ── Oběžníky (newsletter preview) ──
+
+dungeon.get("/api/newsletters/monthly-summary/preview", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+
+  // Generate preview with sample data
+  const msg = monthlyShiftSummaryEmail({
+    username: "Pepa",
+    email: "pepa@example.com",
+    monthName: "Únor",
+    year: 2026,
+    totalShifts: 12,
+    totalHours: 89.5,
+    earnings: 12530,
+    hourlyWage: 140,
+    unloggedDates: ["2026-02-14", "2026-02-21"],
+  });
+
+  return c.json({ subject: msg.subject, html: msg.html });
 });
 
 // ── Setup password landing page (public) ──
@@ -1593,10 +2005,6 @@ const setupPasswordHtml = `<!DOCTYPE html>
         });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || "Request failed");
-
-        if (data.token) {
-          sessionStorage.setItem("dungeon_token", data.token);
-        }
 
         card.innerHTML =
           '<div class="setup-success">' +

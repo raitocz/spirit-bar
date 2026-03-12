@@ -262,6 +262,149 @@ https://spirit-bar.cz`;
   return { to: email, subject: "Pozvánka do SPiRiT Dungeon – nastav si heslo", html, text };
 }
 
+// ── Monthly shift summary email ──
+
+interface MonthlyShiftSummaryOpts {
+  username: string;
+  email: string;
+  monthName: string;
+  year: number;
+  totalShifts: number;
+  totalHours: number;
+  earnings: number | null;
+  hourlyWage: number;
+  unloggedDates: string[];
+}
+
+export function monthlyShiftSummaryEmail(opts: MonthlyShiftSummaryOpts): EmailMessage {
+  const { username, monthName, year, totalShifts, totalHours, earnings, hourlyWage, unloggedDates, email } = opts;
+
+  function formatCZK(amount: number): string {
+    return Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0") + " Kč";
+  }
+
+  let warningHtml = "";
+  let warningText = "";
+  if (unloggedDates.length > 0) {
+    const DAY_NAMES_CZ = ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"];
+    const datesListHtml = unloggedDates.map(d => {
+      const dt = new Date(d + "T00:00:00");
+      return `<li style="padding:3px 0;color:#e0e0e0;">${DAY_NAMES_CZ[dt.getDay()]} ${dt.getDate()}. ${CZECH_MONTHS[dt.getMonth()]}</li>`;
+    }).join("");
+    const datesListText = unloggedDates.map(d => {
+      const dt = new Date(d + "T00:00:00");
+      return `  - ${DAY_NAMES_CZ[dt.getDay()]} ${dt.getDate()}. ${CZECH_MONTHS[dt.getMonth()]}`;
+    }).join("\n");
+
+    warningHtml = `
+      <div style="background:linear-gradient(135deg,rgba(220,80,50,.2),rgba(255,160,50,.15));border:1px solid rgba(220,80,50,.4);border-radius:8px;padding:20px;margin-bottom:24px;">
+        <p style="margin:0 0 12px;color:#ff9070;font-weight:700;font-size:16px;">⚠️ ${unloggedDates.length} nezapsaných směn</p>
+        <ul style="margin:0 0 12px;padding:0 0 0 18px;font-size:14px;">${datesListHtml}</ul>
+        <p style="margin:0;color:#ff9070;font-size:14px;font-weight:600;">Doplň je prosím nejpozději dnes, jinak za ně nebude vyplacena mzda.</p>
+      </div>`;
+
+    warningText = `⚠️ ${unloggedDates.length} NEZAPSANÝCH SMĚN\n\n${datesListText}\n\nDoplň je prosím nejpozději dnes, jinak za ně nebude vyplacena mzda.\n\n`;
+  }
+
+  let earningsHtml = "";
+  let earningsText = "";
+  if (earnings !== null) {
+    earningsHtml = `
+        <tr>
+          <td style="padding:12px 0;color:#888;">Orientační výdělek</td>
+          <td style="padding:12px 0;color:#00cfff;font-weight:700;font-size:18px;">${formatCZK(earnings)}</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="padding:4px 0 12px;color:#666;font-size:12px;">Při sazbě ${hourlyWage} Kč/h. Skutečná částka se může lišit.</td>
+        </tr>`;
+    earningsText = `Orientační výdělek: ${formatCZK(earnings)} (při sazbě ${hourlyWage} Kč/h, skutečná částka se může lišit)\n`;
+  }
+
+  const html = emailLayout(`
+      <h1 style="margin:0 0 8px;font-size:24px;text-align:center;color:#fff;">Měsíční přehled směn</h1>
+      <p style="margin:0 0 24px;font-size:16px;color:#888;text-align:center;">${escapeHtml(monthName)} ${year} · ${escapeHtml(username)}</p>
+      ${warningHtml}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+        <tr>
+          <td style="padding:12px 0;border-bottom:1px solid #1a1f2e;color:#888;width:180px;">Odpracovaných směn</td>
+          <td style="padding:12px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;font-weight:600;">${totalShifts}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 0;border-bottom:1px solid #1a1f2e;color:#888;">Celkem hodin</td>
+          <td style="padding:12px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;font-weight:600;">${totalHours}h</td>
+        </tr>
+        ${earningsHtml}
+      </table>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="https://spirit-bar.cz/dungeon#smeny/zapis" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#2635d4,#00cfff);color:#fff;text-decoration:none;border-radius:100px;font-weight:600;font-size:14px;">Otevřít Dungeon</a>
+      </div>
+  `);
+
+  const text = `Měsíční přehled směn – ${monthName} ${year}
+Uživatel: ${username}
+
+${warningText}Odpracovaných směn: ${totalShifts}
+Celkem hodin: ${totalHours}h
+${earningsText}
+---
+SPiRiT – Bar, Hookah Lounge & Coffee
+Školní 605/18, 415 01 Teplice
++420 731 829 346
+https://spirit-bar.cz`;
+
+  return { to: email, subject: `Přehled směn – ${monthName} ${year}`, html, text };
+}
+
+export function quizAdminNotificationEmail(opts: QuizEmailOpts): EmailMessage {
+  const { quizNumber, date, teamName, icon, members, email } = opts;
+  const czDate = formatCzechDate(date);
+
+  const membersList = members.map((m) => `<li style="padding:2px 0;">${escapeHtml(m)}</li>`).join("");
+
+  const html = emailLayout(`
+      <h1 style="margin:0 0 24px;font-size:28px;text-align:center;color:#fff;">Nová registrace na kvíz</h1>
+      <p style="margin:0 0 20px;font-size:16px;color:#ccc;text-align:center;">Na Kvíz #${quizNumber} se zaregistroval nový tým.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;width:120px;">Kvíz</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;">#${quizNumber} – ${czDate}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;">Tým</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;">${escapeHtml(icon)} ${escapeHtml(teamName)}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#888;">Kontakt</td>
+          <td style="padding:10px 0;border-bottom:1px solid #1a1f2e;color:#e0e0e0;"><a href="mailto:${escapeHtml(email)}" style="color:#00cfff;text-decoration:none;">${escapeHtml(email)}</a></td>
+        </tr>
+        <tr>
+          <td style="padding:10px 0;color:#888;vertical-align:top;">Členové</td>
+          <td style="padding:10px 0;color:#e0e0e0;"><ul style="margin:0;padding:0 0 0 18px;">${membersList}</ul></td>
+        </tr>
+      </table>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="https://spirit-bar.cz/dungeon#kvizy" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#2635d4,#00cfff);color:#fff;text-decoration:none;border-radius:100px;font-weight:600;font-size:14px;">Otevřít Dungeon</a>
+      </div>
+  `);
+
+  const membersText = members.map((m, i) => `  ${i + 1}. ${m}`).join("\n");
+  const text = `Nová registrace na Kvíz #${quizNumber}
+
+Kvíz: #${quizNumber} – ${czDate}
+Tým: ${icon} ${teamName}
+Kontakt: ${email}
+Členové:
+${membersText}
+
+---
+SPiRiT – Bar, Hookah Lounge & Coffee
+Školní 605/18, 415 01 Teplice
++420 731 829 346
+https://spirit-bar.cz`;
+
+  return { to: "kvizy@spirit-bar.cz", subject: `Nová registrace – Kvíz #${quizNumber}: ${icon} ${teamName}`, html, text };
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

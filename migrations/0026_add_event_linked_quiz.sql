@@ -1,0 +1,1 @@
+ALTER TABLE events ADD COLUMN linked_quiz_id INTEGER DEFAULT NULL REFERENCES quizzes(id);
