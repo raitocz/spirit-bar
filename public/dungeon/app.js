@@ -6,7 +6,7 @@
   let currentUser = null;
   let currentRole = null;
   let currentUserId = null;
-  const validPages = ["galerie", "kvizy", "smeny", "akce", "posta", "obeznik", "uzivatele", "nastaveni"];
+  const validPages = ["galerie", "kvizy", "smeny", "akce", "posta", "obeznik", "uzivatele", "logy", "nastaveni"];
   let currentPage = (function() {
     const h = location.hash.replace("#", "").split("/")[0];
     return validPages.includes(h) ? h : null;
@@ -396,6 +396,7 @@
     posta:     { label: "Pošta",      icon: "\u2709\uFE0F",       roles: ["admin"] },
     obeznik:   { label: "Oběžníky",   icon: "\uD83D\uDCE8",       roles: ["admin"] },
     uzivatele: { label: "Uživatelé",  icon: "\uD83D\uDC65",       roles: ["admin"] },
+    logy:      { label: "Logy",       icon: "\uD83D\uDCCB",       roles: ["admin"] },
     nastaveni: { label: "Nastavení",  icon: "\u2699\uFE0F",       roles: ["admin"] },
   };
 
@@ -528,6 +529,8 @@
       renderObeznik(content);
     } else if (currentPage === "uzivatele") {
       renderUzivatele(content);
+    } else if (currentPage === "logy") {
+      renderLogy(content);
     } else if (currentPage === "nastaveni") {
       renderNastaveni(content);
     } else {
@@ -3532,8 +3535,31 @@
   let akceSelectedDate = null;
   let akceMonthEvents = [];
 
+  function parseAkceHash() {
+    const raw = location.hash.replace("#", "");
+    const parts = raw.split("/"); // akce / date / action / id
+    return { date: parts[1] || null, action: parts[2] || null, id: parts[3] || null };
+  }
+
+  function setAkceHash(date, action, id) {
+    let h = "#akce";
+    if (date) h += "/" + date;
+    if (action) h += "/" + action;
+    if (id) h += "/" + id;
+    history.replaceState(null, "", h);
+  }
+
   function renderAkce(container) {
     const now = new Date();
+    const hashInfo = parseAkceHash();
+
+    if (hashInfo.date && /^\d{4}-\d{2}-\d{2}$/.test(hashInfo.date)) {
+      akceSelectedDate = hashInfo.date;
+      const d = new Date(hashInfo.date + "T00:00:00");
+      akceViewYear = d.getFullYear();
+      akceViewMonth = d.getMonth() + 1;
+    }
+
     if (!akceViewYear) akceViewYear = now.getFullYear();
     if (!akceViewMonth) akceViewMonth = now.getMonth() + 1;
 
@@ -3541,18 +3567,28 @@
       <div class="akce-layout">
         <div class="akce-calendar" id="akce-calendar"></div>
         <div class="akce-panel" id="akce-panel">
-          <div class="zapis-info"><span class="zapis-info-icon">📅</span><p>Vyber den v kalendáři</p></div>
+          <div class="zapis-info"><span class="zapis-info-icon">\uD83D\uDCC5</span><p>Vyber den v kalendáři</p></div>
         </div>
       </div>
     `;
 
-    loadAkceMonth().then(() => {
+    loadAkceMonth().then(async () => {
       renderAkceCalendar();
       if (!akceSelectedDate) {
         const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
         akceSelectedDate = today;
         renderAkceCalendar();
-        renderAkceDay();
+      }
+      renderAkceDay();
+
+      // Restore form state from hash
+      if (hashInfo.action === "new") {
+        renderAkceForm(null);
+      } else if (hashInfo.action === "edit" && hashInfo.id) {
+        try {
+          const ev = await api("GET", "/events/" + hashInfo.id);
+          renderAkceForm(ev);
+        } catch (_) {}
       }
     });
   }
@@ -3625,6 +3661,7 @@
     cal.querySelectorAll(".zapis-cal-day[data-date]").forEach(el => {
       el.addEventListener("click", () => {
         akceSelectedDate = el.dataset.date;
+        setAkceHash(akceSelectedDate);
         renderAkceCalendar();
         renderAkceDay();
       });
@@ -3675,13 +3712,17 @@
 
     panel.innerHTML = html;
 
-    document.getElementById("akce-add-btn").addEventListener("click", () => renderAkceForm(null));
+    document.getElementById("akce-add-btn").addEventListener("click", () => {
+      setAkceHash(akceSelectedDate, "new");
+      renderAkceForm(null);
+    });
 
     panel.querySelectorAll(".akce-edit-btn").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         try {
           const ev = await api("GET", "/events/" + btn.dataset.id);
+          setAkceHash(akceSelectedDate, "edit", btn.dataset.id);
           renderAkceForm(ev);
         } catch (err) { showToast(err.message, "error"); }
       });
@@ -3725,32 +3766,66 @@
     panel.innerHTML = '<div class="akce-form">' +
       '<div class="akce-form-header">' +
         '<h3>' + (isEdit ? "Upravit akci" : "Nová akce") + '</h3>' +
-        '<button class="btn-secondary btn-small" id="akce-form-cancel">← Zpět</button>' +
+        '<button class="btn-secondary btn-small" id="akce-form-cancel">\u2190 Zpět</button>' +
       '</div>' +
-      '<div class="form-group"><label>Datum do <span style="color:var(--muted);font-weight:400;font-size:.75em">(volitelné, pro vícedenní akce)</span></label><input type="text" id="akce-date-to" readonly placeholder="—"></div>' +
-      '<div class="form-group"><label>Čas začátku</label>' + timePicker.html + '</div>' +
-      '<div class="form-group"><label>Název akce</label><input type="text" id="akce-title" value="' + esc(title) + '" placeholder="např. Karaoke Night"></div>' +
-      '<div class="form-group"><label>Popis <span style="color:var(--muted);font-weight:400;font-size:.75em">(Markdown: **bold**, *italic*, - seznam)</span></label>' +
-        '<textarea id="akce-desc" rows="5" placeholder="Popis akce…">' + esc(description) + '</textarea></div>' +
-      '<div class="form-group"><label>Cover obrázek <span style="color:var(--muted);font-weight:400;font-size:.75em">(max 1280×720, webp)</span></label>' +
-        (hasCover ? '<div class="akce-cover-preview" id="akce-cover-preview"><img src="/dungeon/photos/' + esc(existing.cover_r2_key) + '" alt=""><button class="btn-small btn-delete" id="akce-cover-remove">Odebrat</button></div>' : '') +
-        '<input type="file" id="akce-cover-input" accept="image/*">' +
-        '<div class="akce-cover-thumb" id="akce-cover-thumb"></div>' +
+      '<div class="akce-form-columns">' +
+        '<div class="akce-form-left">' +
+          '<div class="akce-form-row akce-form-row--datetime">' +
+            '<div class="form-group"><label>Datum</label><input type="text" id="akce-date-from" readonly placeholder="\u2014"></div>' +
+            '<div class="form-group"><label>Datum do <span style="color:var(--muted);font-weight:400;font-size:.75em">(volitelné)</span></label><input type="text" id="akce-date-to" readonly placeholder="\u2014"></div>' +
+            '<div class="form-group"><label>\u010Cas za\u010D\u00E1tku</label>' + timePicker.html + '</div>' +
+            '<div class="form-group"><label>Vstupné (K\u010D)</label><input type="number" id="akce-fee" value="' + entryFee + '" min="0" step="50"></div>' +
+          '</div>' +
+          '<div class="form-group"><label>Název akce</label><input type="text" id="akce-title" value="' + esc(title) + '" placeholder="nap\u0159. Karaoke Night"></div>' +
+          '<div class="form-group"><label>Popis <span style="color:var(--muted);font-weight:400;font-size:.75em">(Markdown: **bold**, *italic*, - seznam)</span></label>' +
+            '<textarea id="akce-desc" rows="5" placeholder="Zadej kl\u00ED\u010Dov\u00E1 slova a info (nap\u0159. halloween, speci\u00E1ln\u00ED drinky, sout\u011B\u017Ee) a klikni na AI \u2728 \u2013 popisek se vygeneruje s\u00E1m">' + esc(description) + '</textarea>' +
+            '<button type="button" class="btn-ai" id="akce-ai-btn" title="Vygenerovat popis pomoc\u00ED AI z kl\u00ED\u010Dov\u00FDch slov">AI \u2728</button></div>' +
+        '</div>' +
+        '<div class="akce-form-right">' +
+          '<div class="form-group"><label>Cover obr\u00E1zek <span style="color:var(--muted);font-weight:400;font-size:.75em">(max 1280\u00D7720, webp)</span></label>' +
+            (hasCover ? '<div class="akce-cover-preview" id="akce-cover-preview"><img src="/dungeon/photos/' + esc(existing.cover_r2_key) + '" alt=""><button class="btn-small btn-delete" id="akce-cover-remove">Odebrat</button></div>' : '') +
+            '<input type="file" id="akce-cover-input" accept="image/*">' +
+            '<div class="akce-cover-thumb" id="akce-cover-thumb"></div>' +
+          '</div>' +
+          '<div class="akce-options">' +
+            '<label class="akce-toggle"><input type="checkbox" id="akce-comp"' + (hasComp ? ' checked' : '') + '><span>Sout\u011B\u017Ee</span></label>' +
+            '<label class="akce-toggle"><input type="checkbox" id="akce-drinks"' + (hasDrinks ? ' checked' : '') + '><span>Speci\u00E1ln\u00ED drinky</span></label>' +
+            '<label class="akce-toggle"><input type="checkbox" id="akce-costume"' + (hasCostume ? ' checked' : '') + '><span>Odm\u011Bna za kost\u00FDm</span></label>' +
+            '<label class="akce-toggle"><input type="checkbox" id="akce-tasting"' + (hasTasting ? ' checked' : '') + '><span>Ochutn\u00E1vkov\u00E1 session</span></label>' +
+            '<label class="akce-toggle"><input type="checkbox" id="akce-quiz-toggle"' + (linkedQuizId ? ' checked' : '') + '><span>Pub Quiz</span></label>' +
+            '<div class="form-group" id="akce-quiz-select-wrap" style="' + (linkedQuizId ? '' : 'display:none') + '"><label>Propojen\u00FD kv\u00EDz</label><div class="akce-quiz-picker" id="akce-quiz-picker"><div class="akce-quiz-picker-value" id="akce-quiz-picker-value">Na\u010D\u00EDt\u00E1n\u00ED\u2026</div></div></div>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
-      '<div class="akce-options">' +
-        '<div class="form-group"><label>Cena za účast (Kč)</label><input type="number" id="akce-fee" value="' + entryFee + '" min="0" step="50"></div>' +
-        '<label class="akce-toggle"><input type="checkbox" id="akce-comp"' + (hasComp ? ' checked' : '') + '><span>Soutěže</span></label>' +
-        '<label class="akce-toggle"><input type="checkbox" id="akce-drinks"' + (hasDrinks ? ' checked' : '') + '><span>Speciální drinky</span></label>' +
-        '<label class="akce-toggle"><input type="checkbox" id="akce-costume"' + (hasCostume ? ' checked' : '') + '><span>Odměna za kostým</span></label>' +
-        '<label class="akce-toggle"><input type="checkbox" id="akce-tasting"' + (hasTasting ? ' checked' : '') + '><span>Ochutnávková session</span></label>' +
-        '<label class="akce-toggle"><input type="checkbox" id="akce-quiz-toggle"' + (linkedQuizId ? ' checked' : '') + '><span>Pub Quiz</span></label>' +
-        '<div class="form-group" id="akce-quiz-select-wrap" style="' + (linkedQuizId ? '' : 'display:none') + '"><label>Propojený kvíz</label><div class="akce-quiz-picker" id="akce-quiz-picker"><div class="akce-quiz-picker-value" id="akce-quiz-picker-value">Načítání…</div></div></div>' +
-      '</div>' +
-      '<button class="btn-primary" id="akce-save">' + (isEdit ? "Uložit změny" : "Vytvořit akci") + '</button>' +
+      '<button class="btn-primary" id="akce-save">' + (isEdit ? "Ulo\u017Eit zm\u011Bny" : "Vytvo\u0159it akci") + '</button>' +
     '</div>';
 
     timePicker.wire();
+    DatePicker.create("akce-date-from", date);
     DatePicker.create("akce-date-to", dateTo);
+
+    // AI description generator
+    document.getElementById("akce-ai-btn").addEventListener("click", async function () {
+      var btn = this;
+      var desc = document.getElementById("akce-desc");
+      var keywords = desc.value.trim();
+      if (!keywords) { desc.focus(); return; }
+      var titleVal = document.getElementById("akce-title").value.trim();
+      btn.disabled = true;
+      btn.textContent = "Generuji…";
+      try {
+        var res = await api("POST", "/ai/event-description", {
+          keywords: keywords,
+          title: titleVal || undefined,
+          date: date || undefined
+        });
+        if (res.description) desc.value = res.description;
+      } catch (e) {
+        alert("Chyba AI: " + (e.message || e));
+      }
+      btn.disabled = false;
+      btn.textContent = "AI ✨";
+    });
 
     // Pub Quiz toggle + custom quiz picker
     const quizToggle = document.getElementById("akce-quiz-toggle");
@@ -3869,7 +3944,10 @@
       });
     }
 
-    document.getElementById("akce-form-cancel").addEventListener("click", () => renderAkceDay());
+    document.getElementById("akce-form-cancel").addEventListener("click", () => {
+      setAkceHash(akceSelectedDate);
+      renderAkceDay();
+    });
 
     document.getElementById("akce-save").addEventListener("click", async () => {
       const titleVal = document.getElementById("akce-title").value.trim();
@@ -3885,9 +3963,11 @@
       if (!titleVal) { showToast("Vyplň název akce", "error"); return; }
       if (!timeVal || parseTime(timeVal) === null) { showToast("Vyplň čas začátku", "error"); return; }
 
+      const dateFromVal = document.getElementById("akce-date-from").dataset.value || date;
       const dateToVal = document.getElementById("akce-date-to").dataset.value || "";
+      if (!dateFromVal) { showToast("Vyplň datum akce", "error"); return; }
       const fd = new FormData();
-      fd.append("date", date);
+      fd.append("date", dateFromVal);
       fd.append("date_to", dateToVal);
       fd.append("time", timeVal);
       fd.append("title", titleVal);
@@ -3924,6 +4004,7 @@
         if (!res.ok) throw new Error(data.error || "Save failed");
 
         showToast(isEdit ? "Akce upravena" : "Akce vytvořena");
+        setAkceHash(akceSelectedDate);
         await loadAkceMonth();
         renderAkceCalendar();
         renderAkceDay();
@@ -4008,16 +4089,20 @@
 
   // ── Nastavení ──
 
+  var DEFAULT_AI_PROMPT = "Jsi copywriter pro SPiRiT \u2013 Bar, Hookah Lounge & Coffee v Teplic\u00edch. P\u00ed\u0161e\u0161 kr\u00e1tk\u00e9, v\u00fdsti\u017en\u00e9 popisky akc\u00ed pro web.\n\nStyl:\n- Neform\u00e1ln\u00ed, p\u0159\u00e1telsk\u00fd, ale ne p\u0159ehnan\u011b\n- Sm\u011b\u0159uj k akci, \u017e\u00e1dn\u00e9 zbyte\u010dn\u00e9 fr\u00e1ze\n- Pi\u0161 \u010desky, p\u0159irozen\u011b, bez kli\u0161\u00e9\n- Pou\u017e\u00edvej Markdown: **bold** pro d\u016fle\u017eit\u00e9 v\u011bci, - pro seznamy\n- Popis by m\u011bl m\u00edt 2\u20134 v\u011bty nebo kr\u00e1tk\u00e9 odstavce\n- Nepou\u017e\u00edvej emoji\n- Nepi\u0161 nadpis/n\u00e1zev akce \u2013 ten u\u017e existuje zvl\u00e1\u0161\u0165\n- C\u00edlovka: mlad\u00ed lid\u00e9 18\u201335 co r\u00e1di zajdou na drink";
+
   async function renderNastaveni(container) {
     container.innerHTML = '<div class="placeholder-msg">Načítání…</div>';
     try {
       const settings = await api("GET", "/settings");
       const wage = settings.hourly_wage || "";
+      const aiPrompt = settings.ai_event_prompt || "";
 
       container.innerHTML = `
+        <div class="settings-grid">
         <div class="settings-card">
           <div class="settings-card-header">
-            <span class="settings-card-icon">💰</span>
+            <span class="settings-card-icon">\uD83D\uDCB0</span>
             <div>
               <h3 class="settings-card-title">Hodinová mzda</h3>
               <p class="settings-card-desc">Sazba pro výpočet měsíční mzdy ve statistikách směn</p>
@@ -4033,9 +4118,30 @@
             </div>
             <div class="form-actions">
               <button type="submit" class="btn-primary">Uložit</button>
-              <span id="wage-saved" class="settings-saved">Uloženo ✓</span>
+              <span id="wage-saved" class="settings-saved">Uloženo \u2713</span>
             </div>
           </form>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <span class="settings-card-icon">\u2728</span>
+            <div>
+              <h3 class="settings-card-title">AI – system prompt</h3>
+              <p class="settings-card-desc">Instrukce pro AI agenta, který generuje popisky akcí. Pokud je pole prázdné, použije se výchozí prompt.</p>
+            </div>
+          </div>
+          <form id="ai-prompt-form" class="settings-card-body">
+            <div class="form-group">
+              <textarea id="ai-prompt-input" rows="12" placeholder="Výchozí prompt se použije automaticky…">${esc(aiPrompt)}</textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Uložit</button>
+              <button type="button" class="btn-secondary" id="ai-prompt-default">Obnovit výchozí</button>
+              <span id="ai-prompt-saved" class="settings-saved">Uloženo \u2713</span>
+            </div>
+          </form>
+        </div>
         </div>
       `;
 
@@ -4047,6 +4153,19 @@
         const saved = document.getElementById("wage-saved");
         saved.classList.add("visible");
         setTimeout(() => { saved.classList.remove("visible"); }, 2000);
+      });
+
+      document.getElementById("ai-prompt-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const val = document.getElementById("ai-prompt-input").value.trim();
+        await api("PUT", "/settings/ai_event_prompt", { value: val });
+        const saved = document.getElementById("ai-prompt-saved");
+        saved.classList.add("visible");
+        setTimeout(() => { saved.classList.remove("visible"); }, 2000);
+      });
+
+      document.getElementById("ai-prompt-default").addEventListener("click", () => {
+        document.getElementById("ai-prompt-input").value = DEFAULT_AI_PROMPT;
       });
     } catch (err) {
       container.innerHTML = `<div class="placeholder-msg">Chyba při načítání nastavení</div>`;
@@ -4081,11 +4200,149 @@
     }
   }
 
+  // ── Logy (audit log) ──
+
+  const AUDIT_CATEGORIES = {
+    auth: "Přihlášení",
+    gallery: "Galerie",
+    quiz: "Kvízy",
+    team: "Týmy",
+    user: "Uživatelé",
+    event: "Akce",
+    settings: "Nastavení",
+    ai: "AI",
+  };
+
+  const AUDIT_ACTIONS = {
+    login: "Přihlášení",
+    login_failed: "Neúspěšné přihlášení",
+    logout: "Odhlášení",
+    setup_password: "Nastavení hesla",
+    create: "Vytvoření",
+    update: "Úprava",
+    delete: "Smazání",
+    upload_photo: "Nahrání fotky",
+    delete_photo: "Smazání fotky",
+    set_results: "Nastavení výsledků",
+    set_payment: "Změna platby",
+    send_confirmation: "Odeslání potvrzení",
+    change_role: "Změna role",
+    force_logout: "Vynucené odhlášení",
+    reinvite: "Opětovná pozvánka",
+    generate_description: "Generování popisu",
+  };
+
+  const CATEGORY_COLORS = {
+    auth: "#38bdf8",
+    gallery: "#4ade80",
+    quiz: "#facc15",
+    team: "#fb923c",
+    user: "#a78bfa",
+    event: "#f472b6",
+    settings: "#94a3b8",
+    ai: "#2dd4bf",
+  };
+
+  async function renderLogy(container) {
+    let auditCategory = "";
+    let auditUserId = "";
+    let auditOffset = 0;
+    const auditLimit = 50;
+    let auditUsers = [];
+
+    try {
+      auditUsers = await api("GET", "/audit-log/users");
+    } catch {}
+
+    container.innerHTML = `
+      <div class="audit-toolbar">
+        <select id="audit-cat" class="form-input audit-select">
+          <option value="">Všechny kategorie</option>
+          ${Object.entries(AUDIT_CATEGORIES).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}
+        </select>
+        <select id="audit-user" class="form-input audit-select">
+          <option value="">Všichni uživatelé</option>
+          ${auditUsers.map(u => `<option value="${u.user_id}">${esc(u.username)}</option>`).join("")}
+        </select>
+      </div>
+      <div id="audit-table-wrap"></div>
+    `;
+
+    const catSel = document.getElementById("audit-cat");
+    const userSel = document.getElementById("audit-user");
+
+    catSel.addEventListener("change", () => { auditCategory = catSel.value; auditOffset = 0; loadAudit(); });
+    userSel.addEventListener("change", () => { auditUserId = userSel.value; auditOffset = 0; loadAudit(); });
+
+    async function loadAudit() {
+      const wrap = document.getElementById("audit-table-wrap");
+      let url = `/audit-log?limit=${auditLimit}&offset=${auditOffset}`;
+      if (auditCategory) url += `&category=${auditCategory}`;
+      if (auditUserId) url += `&user_id=${auditUserId}`;
+
+      try {
+        const data = await api("GET", url);
+        const items = data.items || [];
+        const total = data.total || 0;
+        const totalPages = Math.ceil(total / auditLimit);
+        const currentPageNum = Math.floor(auditOffset / auditLimit) + 1;
+
+        if (!items.length) {
+          wrap.innerHTML = '<div class="placeholder-msg">Žádné záznamy</div>';
+          return;
+        }
+
+        let html = `<table class="audit-table">
+          <thead><tr><th>Čas</th><th>Uživatel</th><th>Kategorie</th><th>Akce</th><th>Detail</th></tr></thead>
+          <tbody>`;
+
+        for (const item of items) {
+          const catLabel = AUDIT_CATEGORIES[item.category] || item.category;
+          const catColor = CATEGORY_COLORS[item.category] || "#64748b";
+          const actionLabel = AUDIT_ACTIONS[item.action] || item.action;
+          const time = item.created_at ? new Date(item.created_at + "Z").toLocaleString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+          const detail = item.details || (item.entity_type && item.entity_id ? `${item.entity_type} #${item.entity_id}` : "");
+
+          html += `<tr>
+            <td class="audit-time">${esc(time)}</td>
+            <td>${item.username ? esc(item.username) : '<span class="muted">—</span>'}</td>
+            <td><span class="audit-badge" style="background:${catColor}">${esc(catLabel)}</span></td>
+            <td>${esc(actionLabel)}</td>
+            <td class="audit-detail">${esc(detail)}</td>
+          </tr>`;
+        }
+
+        html += "</tbody></table>";
+
+        if (totalPages > 1) {
+          html += `<div class="audit-paging">
+            <button class="btn-secondary btn-sm" id="audit-prev" ${currentPageNum <= 1 ? "disabled" : ""}>Předchozí</button>
+            <span class="audit-page-info">${currentPageNum} / ${totalPages}</span>
+            <button class="btn-secondary btn-sm" id="audit-next" ${currentPageNum >= totalPages ? "disabled" : ""}>Další</button>
+          </div>`;
+        }
+
+        wrap.innerHTML = html;
+
+        const prevBtn = document.getElementById("audit-prev");
+        const nextBtn = document.getElementById("audit-next");
+        if (prevBtn) prevBtn.addEventListener("click", () => { auditOffset -= auditLimit; loadAudit(); });
+        if (nextBtn) nextBtn.addEventListener("click", () => { auditOffset += auditLimit; loadAudit(); });
+      } catch (err) {
+        wrap.innerHTML = `<div class="placeholder-msg">Chyba: ${esc(err.message)}</div>`;
+      }
+    }
+
+    loadAudit();
+  }
+
   // ── Hash navigation ──
   window.addEventListener("hashchange", () => {
     const raw = location.hash.replace("#", "");
     const page = raw.split("/")[0];
     const sub = raw.split("/")[1] || null;
+    // Akce sub-routes handled internally via replaceState, skip re-render
+    if (page === currentPage && page === "akce") return;
     // Handle sub-tab changes within same page (e.g. smeny -> smeny/zapis)
     if (page === currentPage && page === "smeny" && sub !== smenyTab) {
       smenyTab = sub === "zapis" ? "zapis" : "rozpis";

@@ -2,15 +2,50 @@
   var app = document.getElementById("akce-app");
   if (!app) return;
 
-  var DAY_NAMES = ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"];
-  var MONTH_NAMES = [
-    "ledna", "února", "března", "dubna", "května", "června",
-    "července", "srpna", "září", "října", "listopadu", "prosince",
-  ];
-  var MONTH_LABELS = [
-    "Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
-    "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec",
-  ];
+  var LOCALE_DATA = {
+    cs: {
+      days: ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"],
+      months: ["ledna", "února", "března", "dubna", "května", "června", "července", "srpna", "září", "října", "listopadu", "prosince"],
+      monthLabels: ["Leden", "Únor", "Březen", "Duben", "Květen", "Červen", "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"],
+    },
+    en: {
+      days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+      monthLabels: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    },
+    de: {
+      days: ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"],
+      months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+      monthLabels: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    },
+    pl: {
+      days: ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"],
+      months: ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"],
+      monthLabels: ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"],
+    },
+    sigma: {
+      days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+      monthLabels: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    },
+  };
+  var loc = LOCALE_DATA[currentLang] || LOCALE_DATA.cs;
+  var DAY_NAMES = loc.days;
+  var MONTH_NAMES = loc.months;
+  var MONTH_LABELS = loc.monthLabels;
+
+  // Detect language from URL prefix
+  var langMatch = location.pathname.match(/^\/(en|de|pl|sigma)(\/|$)/);
+  var currentLang = langMatch ? langMatch[1] : "cs";
+
+  var UI = {
+    cs: { events: "Akce", upcoming: "Nadcházející akce", past: "Proběhlé akce", none: "Žádné akce", noneUpcoming: "Žádné nadcházející akce.", follow: "Sledujte nás pro novinky o připravovaných eventech.", loadError: "Chyba při načítání", today: "Dnes", tomorrow: "Zítra", addCal: "Přidat do kalendáře", close: "Zavřít", register: "Registrace na kvíz", competitions: "Soutěže", specialDrinks: "Speciální drinky", costumeReward: "Odměna za kostým", tasting: "Ochutnávková session", pubQuiz: "Pub Quiz" },
+    en: { events: "Events", upcoming: "Upcoming Events", past: "Past Events", none: "No events", noneUpcoming: "No upcoming events.", follow: "Follow us for news about upcoming events.", loadError: "Loading error", today: "Today", tomorrow: "Tomorrow", addCal: "Add to calendar", close: "Close", register: "Register for quiz", competitions: "Competitions", specialDrinks: "Special drinks", costumeReward: "Costume reward", tasting: "Tasting session", pubQuiz: "Pub Quiz" },
+    de: { events: "Veranstaltungen", upcoming: "Kommende Veranstaltungen", past: "Vergangene Veranstaltungen", none: "Keine Veranstaltungen", noneUpcoming: "Keine kommenden Veranstaltungen.", follow: "Folgen Sie uns für Neuigkeiten über kommende Events.", loadError: "Ladefehler", today: "Heute", tomorrow: "Morgen", addCal: "Zum Kalender hinzufügen", close: "Schließen", register: "Quiz-Anmeldung", competitions: "Wettbewerbe", specialDrinks: "Spezielle Drinks", costumeReward: "Kostümbelohnung", tasting: "Verkostung", pubQuiz: "Pub Quiz" },
+    pl: { events: "Wydarzenia", upcoming: "Nadchodzące wydarzenia", past: "Minione wydarzenia", none: "Brak wydarzeń", noneUpcoming: "Brak nadchodzących wydarzeń.", follow: "Śledź nas, aby być na bieżąco z nadchodzącymi eventami.", loadError: "Błąd ładowania", today: "Dziś", tomorrow: "Jutro", addCal: "Dodaj do kalendarza", close: "Zamknij", register: "Rejestracja na quiz", competitions: "Konkursy", specialDrinks: "Specjalne drinki", costumeReward: "Nagroda za kostium", tasting: "Sesja degustacyjna", pubQuiz: "Pub Quiz" },
+    sigma: { events: "Lore Drops", upcoming: "Incoming W's", past: "Past Arcs", none: "No lore drops", noneUpcoming: "No upcoming W's. We're in our rest arc.", follow: "Follow us for the next main character event, no cap.", loadError: "Bruh error", today: "TODAY (lock in!)", tomorrow: "Tomorrow (get ready)", addCal: "Lock it in", close: "Dip out", register: "Sign up for Brain Rot Quiz", competitions: "Competitions", specialDrinks: "Sigma juice", costumeReward: "Costume aura bonus", tasting: "Taste test arc", pubQuiz: "Brain Rot Quiz" },
+  };
+  var t = UI[currentLang] || UI.cs;
 
   var eventsData = [];
 
@@ -82,11 +117,11 @@
   function buildTags(ev) {
     var tags = [];
     if (ev.entry_fee > 0) tags.push(ev.entry_fee + " Kč");
-    if (ev.has_competitions) tags.push("Soutěže");
-    if (ev.has_special_drinks) tags.push("Speciální drinky");
-    if (ev.has_costume_reward) tags.push("Odměna za kostým");
-    if (ev.has_tasting) tags.push("Ochutnávková session");
-    if (ev.linked_quiz_id) tags.push("Pub Quiz");
+    if (ev.has_competitions) tags.push(t.competitions);
+    if (ev.has_special_drinks) tags.push(t.specialDrinks);
+    if (ev.has_costume_reward) tags.push(t.costumeReward);
+    if (ev.has_tasting) tags.push(t.tasting);
+    if (ev.linked_quiz_id) tags.push(t.pubQuiz);
     return tags;
   }
 
@@ -199,10 +234,11 @@
       ? '<div class="akce-modal-desc">' + renderDescription(ev.description) + '</div>'
       : '';
 
+    var kvizPrefix = currentLang !== "cs" ? "/" + currentLang + "/kviz" : "/kviz";
     var registerHtml = ev.linked_quiz_id
-      ? '<a href="/kviz?register=' + ev.linked_quiz_id + '" class="akce-register-btn">' +
+      ? '<a href="' + kvizPrefix + '?register=' + ev.linked_quiz_id + '" class="akce-register-btn">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>' +
-          ' Registrace na kvíz' +
+          ' ' + esc(t.register) +
         '</a>'
       : '';
 
@@ -224,7 +260,7 @@
           '<div class="akce-cal-wrap">' +
             '<button class="akce-cal-btn">' +
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-              ' Přidat do kalendáře' +
+              ' ' + esc(t.addCal) +
             '</button>' +
             '<div class="akce-cal-dropdown">' +
               '<button class="akce-cal-option" data-cal="google">' +
@@ -244,7 +280,7 @@
           registerHtml +
           '<button class="akce-modal-close">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
-            ' Zavřít' +
+            ' ' + esc(t.close) +
           '</button>' +
         '</div>' +
       '</div>';
@@ -316,15 +352,15 @@
     app.innerHTML = '<div class="akce-pub-loading"><div class="galerie-spinner"></div></div>';
 
     try {
-      var res = await fetch("/api/events");
+      var res = await fetch("/api/events" + (currentLang !== "cs" ? "?lang=" + currentLang : ""));
       eventsData = await res.json();
 
       if (!eventsData.length) {
         app.innerHTML =
           '<div class="container" style="padding-top:8rem;text-align:center;">' +
-          '<p class="section-label">Akce</p>' +
-          '<h2 class="section-title">Žádné akce</h2>' +
-          '<p class="section-sub" style="margin-top:1rem;color:var(--muted)">Sledujte nás pro novinky o připravovaných eventech.</p>' +
+          '<p class="section-label">' + esc(t.events) + '</p>' +
+          '<h2 class="section-title">' + esc(t.none) + '</h2>' +
+          '<p class="section-sub" style="margin-top:1rem;color:var(--muted)">' + esc(t.follow) + '</p>' +
           '</div>';
         return;
       }
@@ -357,8 +393,8 @@
         var dateLabel = formatDateRange(ev.date, ev.date_to);
         var whenBadge = "";
         if (!isPast) {
-          if (isToday(ev.date, ev.date_to)) whenBadge = '<span class="akce-pub-when akce-pub-when--today">Dnes</span>';
-          else if (isTomorrow(ev.date)) whenBadge = '<span class="akce-pub-when akce-pub-when--tomorrow">Zítra</span>';
+          if (isToday(ev.date, ev.date_to)) whenBadge = '<span class="akce-pub-when akce-pub-when--today">' + esc(t.today) + '</span>';
+          else if (isTomorrow(ev.date)) whenBadge = '<span class="akce-pub-when akce-pub-when--tomorrow">' + esc(t.tomorrow) + '</span>';
         }
 
         var tags = buildTags(ev);
@@ -415,17 +451,17 @@
       }
 
       var html = '<div class="container akce-pub-container">' +
-        '<p class="section-label">Akce</p>' +
-        '<h2 class="section-title">Nadcházející akce</h2>';
+        '<p class="section-label">' + esc(t.events) + '</p>' +
+        '<h2 class="section-title">' + esc(t.upcoming) + '</h2>';
 
       if (upcoming.length) {
         html += renderMonthGroup(groupByMonth(upcoming), 'asc', false);
       } else {
-        html += '<p style="color:var(--muted);margin-top:1.5rem;">Žádné nadcházející akce.</p>';
+        html += '<p style="color:var(--muted);margin-top:1.5rem;">' + esc(t.noneUpcoming) + '</p>';
       }
 
       if (past.length) {
-        html += '<h2 class="section-title" style="margin-top:3rem;">Proběhlé akce</h2>';
+        html += '<h2 class="section-title" style="margin-top:3rem;">' + esc(t.past) + '</h2>';
         html += renderMonthGroup(groupByMonth(past), 'desc', true);
       }
 
@@ -453,7 +489,7 @@
     } catch (err) {
       app.innerHTML =
         '<div class="container" style="padding-top:8rem;text-align:center;">' +
-        '<h2 class="section-title">Chyba při načítání</h2>' +
+        '<h2 class="section-title">' + esc(t.loadError) + '</h2>' +
         '<p style="color:var(--muted)">' + esc(err.message) + '</p>' +
         '</div>';
     }

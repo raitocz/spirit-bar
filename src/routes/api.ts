@@ -272,11 +272,34 @@ api.get("/galleries", async (c) => {
 // ── Public events ──
 
 api.get("/events", async (c) => {
+  const lang = c.req.query("lang");
+  const validLangs = ["en", "de", "pl", "sigma"];
+  const suffix = lang && validLangs.includes(lang) ? `_${lang}` : null;
+
   const { results } = await c.env.DB.prepare(
-    `SELECT id, date, date_to, time, title, description, cover_r2_key, cover_thumb_r2_key, entry_fee,
+    `SELECT id, date, date_to, time, title, description,
+            title_en, title_de, title_pl, title_sigma,
+            description_en, description_de, description_pl, description_sigma,
+            cover_r2_key, cover_thumb_r2_key, entry_fee,
             has_competitions, has_special_drinks, has_costume_reward, has_tasting, linked_quiz_id
      FROM events ORDER BY date ASC, time ASC`
   ).all();
+
+  if (suffix) {
+    for (const ev of results as any[]) {
+      ev.title = ev[`title${suffix}`] || ev.title;
+      ev.description = ev[`description${suffix}`] || ev.description;
+    }
+  }
+
+  // Strip translation columns from response
+  for (const ev of results as any[]) {
+    for (const l of validLangs) {
+      delete ev[`title_${l}`];
+      delete ev[`description_${l}`];
+    }
+  }
+
   return c.json(results);
 });
 
