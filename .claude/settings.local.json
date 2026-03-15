@@ -25,6 +25,13 @@
       "Bash(npx vitest:*)",
       "Bash(read:*)",
       "Bash(bin/cm help:*)",
+      "Bash(npx npm-check-updates:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm info:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(bin/cm help:*)",
       "Bash(git push:*)",
       "Bash(curl -s https://unpkg.com/leaflet@1.9.4/dist/leaflet.js | openssl dgst -sha256 -binary | openssl base64 -A && echo)"
     ]
