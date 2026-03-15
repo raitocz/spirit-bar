@@ -4,17 +4,18 @@ import { hashPassword } from "../src/lib/auth";
 
 const ADMIN_USER = "testadmin";
 const ADMIN_PASS = "testpassword123";
+const ADMIN_EMAIL = "testadmin@spirit-bar.cz";
 
 describe("Dungeon (Admin) API", () => {
   let sessionCookie: string;
 
   beforeAll(async () => {
-    // Create admin user with hashed password
+    // Create admin user with hashed password and email
     const hash = await hashPassword(ADMIN_PASS);
     await env.DB.prepare(
-      "INSERT INTO admins (username, password_hash, role) VALUES (?, ?, 'admin')"
+      "INSERT INTO admins (username, password_hash, role, email) VALUES (?, ?, 'admin', ?)"
     )
-      .bind(ADMIN_USER, hash)
+      .bind(ADMIN_USER, hash, ADMIN_EMAIL)
       .run();
   });
 
@@ -24,26 +25,92 @@ describe("Dungeon (Admin) API", () => {
 
   // ── Auth ──
 
-  it("POST /dungeon/api/login → 401 with wrong credentials", async () => {
+  // Helper to perform login request
+  async function doLogin(username: string, password: string, remember?: boolean) {
+    return SELF.fetch("http://localhost/dungeon/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, remember }),
+    });
+  }
+
+  it("POST /dungeon/api/login → 400 when username is missing", async () => {
     const res = await SELF.fetch("http://localhost/dungeon/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: ADMIN_USER, password: "wrong" }),
+      body: JSON.stringify({ password: ADMIN_PASS }),
     });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /dungeon/api/login → 400 when password is missing", async () => {
+    const res = await SELF.fetch("http://localhost/dungeon/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: ADMIN_USER }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /dungeon/api/login → 401 with wrong password (username)", async () => {
+    const res = await doLogin(ADMIN_USER, "wrong");
     expect(res.status).toBe(401);
   });
 
-  it("POST /dungeon/api/login → 200 with correct credentials + sets cookie", async () => {
-    const res = await SELF.fetch("http://localhost/dungeon/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
-    });
+  it("POST /dungeon/api/login → 401 with wrong password (email)", async () => {
+    const res = await doLogin(ADMIN_EMAIL, "wrong");
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /dungeon/api/login → 401 with non-existent username", async () => {
+    const res = await doLogin("nonexistent", ADMIN_PASS);
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /dungeon/api/login → 401 with non-existent email", async () => {
+    const res = await doLogin("nobody@spirit-bar.cz", ADMIN_PASS);
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /dungeon/api/login → 200 with username", async () => {
+    const res = await doLogin(ADMIN_USER, ADMIN_PASS);
     expect(res.status).toBe(200);
     const body: any = await res.json();
     expect(body.username).toBe(ADMIN_USER);
+  });
 
-    // Extract session cookie from Set-Cookie header
+  it("POST /dungeon/api/login → 200 with email", async () => {
+    const res = await doLogin(ADMIN_EMAIL, ADMIN_PASS);
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(body.username).toBe(ADMIN_USER);
+  });
+
+  it("POST /dungeon/api/login → 200 with uppercase username (case-insensitive)", async () => {
+    const res = await doLogin("TestAdmin", ADMIN_PASS);
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(body.username).toBe(ADMIN_USER);
+  });
+
+  it("POST /dungeon/api/login → 200 with uppercase email (case-insensitive)", async () => {
+    const res = await doLogin("TestAdmin@Spirit-Bar.CZ", ADMIN_PASS);
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(body.username).toBe(ADMIN_USER);
+  });
+
+  it("POST /dungeon/api/login → 200 with whitespace-padded input", async () => {
+    const res = await doLogin("  testadmin  ", ADMIN_PASS);
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(body.username).toBe(ADMIN_USER);
+  });
+
+  it("POST /dungeon/api/login → sets session cookie", async () => {
+    const res = await doLogin(ADMIN_USER, ADMIN_PASS);
+    expect(res.status).toBe(200);
+
     const setCookie = res.headers.get("set-cookie") || "";
     const match = setCookie.match(/session=([^\s;]+)/);
     expect(match).toBeTruthy();

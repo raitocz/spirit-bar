@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { hashPassword, verifyPassword, signJwt, verifyJwt } from "../lib/auth";
 import { getMailbox, clearMailbox, sendEmail, quizConfirmationEmail, adminInviteEmail, monthlyShiftSummaryEmail } from "../lib/email";
 import { errorPage } from "../lib/layout";
+import { logAudit, logAuditFromUser } from "../lib/audit";
 
 type Bindings = {
   DB: D1Database;
@@ -9,6 +10,7 @@ type Bindings = {
   JWT_SECRET: string;
   ENVIRONMENT?: string;
   RESEND_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
 };
 
 export const dungeon = new Hono<{ Bindings: Bindings }>();
@@ -148,14 +150,16 @@ dungeon.post("/api/login", async (c) => {
     return c.json({ error: "username and password are required" }, 400);
   }
 
+  const login = body.username.trim().toLowerCase();
   const row = await c.env.DB.prepare(
-    "SELECT id, username, password_hash, role, session_version FROM admins WHERE username = ?"
+    "SELECT id, username, password_hash, role, session_version FROM admins WHERE LOWER(username) = ? OR LOWER(email) = ?"
   )
-    .bind(body.username.trim().toLowerCase())
+    .bind(login, login)
     .first<{ id: number; username: string; password_hash: string; role: string; session_version: number }>();
 
   if (!row || !(await verifyPassword(body.password, row.password_hash))) {
     recordLoginAttempt(ip);
+    logAudit(c, { ip, category: "auth", action: "login_failed", details: `username: ${body.username.trim().toLowerCase()}` });
     return c.json({ error: "invalid credentials" }, 401);
   }
 
@@ -169,11 +173,21 @@ dungeon.post("/api/login", async (c) => {
   );
 
   setSessionCookie(c, token, !!body.remember);
+  logAudit(c, { user_id: row.id, username: row.username, ip, category: "auth", action: "login", entity_type: "user", entity_id: row.id });
   return c.json({ id: row.id, username: row.username, role: row.role });
 });
 
-dungeon.post("/api/logout", (c) => {
+dungeon.post("/api/logout", async (c) => {
+  const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
+  const token = getCookieToken(c);
+  let userId: number | undefined;
+  let username: string | undefined;
+  if (token) {
+    const payload = await verifyJwt(token, c.env.JWT_SECRET);
+    if (payload) { userId = payload.sub as number; username = payload.username as string; }
+  }
   clearSessionCookie(c);
+  logAudit(c, { user_id: userId, username, ip, category: "auth", action: "logout", entity_type: "user", entity_id: userId });
   return c.json({ ok: true });
 });
 
@@ -249,6 +263,7 @@ dungeon.post("/api/setup-password", async (c) => {
   );
 
   setSessionCookie(c, jwt, false);
+  logAudit(c, { user_id: user.id, username: user.username, ip, category: "auth", action: "setup_password", entity_type: "user", entity_id: user.id });
   return c.json({ username: user.username, role: user.role });
 });
 
@@ -348,6 +363,7 @@ dungeon.post("/api/galleries", async (c) => {
   const row = await c.env.DB.prepare("SELECT * FROM galleries WHERE id = ?")
     .bind(result.meta.last_row_id)
     .first();
+  logAuditFromUser(c, "gallery", "create", { entity_type: "gallery", entity_id: result.meta.last_row_id as number, details: body.title!.trim() });
   return c.json(row, 201);
 });
 
@@ -385,6 +401,7 @@ dungeon.put("/api/galleries/:id", async (c) => {
   const row = await c.env.DB.prepare("SELECT * FROM galleries WHERE id = ?")
     .bind(id)
     .first();
+  logAuditFromUser(c, "gallery", "update", { entity_type: "gallery", entity_id: id, details: body.title!.trim() });
   return c.json(row);
 });
 
@@ -414,6 +431,7 @@ dungeon.delete("/api/galleries/:id", async (c) => {
     .bind(id)
     .run();
   if (!meta.changes) return c.json({ error: "not found" }, 404);
+  logAuditFromUser(c, "gallery", "delete", { entity_type: "gallery", entity_id: id });
   return c.json({ ok: true });
 });
 
@@ -507,6 +525,7 @@ dungeon.post("/api/galleries/:id/photos", async (c) => {
     .bind(result.meta.last_row_id)
     .first();
 
+  logAuditFromUser(c, "gallery", "upload_photo", { entity_type: "photo", entity_id: result.meta.last_row_id as number, details: `gallery_id: ${galleryId}` });
   return c.json(row, 201);
 });
 
@@ -555,6 +574,7 @@ dungeon.delete("/api/galleries/:id/photos/:photoId", async (c) => {
     .bind(photoId)
     .run();
 
+  logAuditFromUser(c, "gallery", "delete_photo", { entity_type: "photo", entity_id: photoId, details: `gallery_id: ${galleryId}` });
   return c.json({ ok: true });
 });
 
@@ -648,6 +668,7 @@ dungeon.post("/api/quizzes", async (c) => {
   const row = await c.env.DB.prepare("SELECT * FROM quizzes WHERE id = ?")
     .bind(result.meta.last_row_id)
     .first();
+  logAuditFromUser(c, "quiz", "create", { entity_type: "quiz", entity_id: result.meta.last_row_id as number, details: `#${body.quiz_number} ${body.date!.trim()}` });
   return c.json(row, 201);
 });
 
@@ -685,6 +706,7 @@ dungeon.put("/api/quizzes/:id", async (c) => {
   const row = await c.env.DB.prepare("SELECT * FROM quizzes WHERE id = ?")
     .bind(id)
     .first();
+  logAuditFromUser(c, "quiz", "update", { entity_type: "quiz", entity_id: id, details: `#${body.quiz_number} ${body.date!.trim()}` });
   return c.json(row);
 });
 
@@ -696,6 +718,7 @@ dungeon.delete("/api/quizzes/:id", async (c) => {
     .bind(id)
     .run();
   if (!meta.changes) return c.json({ error: "not found" }, 404);
+  logAuditFromUser(c, "quiz", "delete", { entity_type: "quiz", entity_id: id });
   return c.json({ ok: true });
 });
 
@@ -744,6 +767,7 @@ dungeon.put("/api/teams/:id/payment", async (c) => {
     .bind(body.payment_status ?? null, teamId)
     .run();
   if (!meta.changes) return c.json({ error: "team not found" }, 404);
+  logAuditFromUser(c, "team", "set_payment", { entity_type: "team", entity_id: teamId, details: `status: ${body.payment_status ?? "null"}` });
   return c.json({ ok: true });
 });
 
@@ -785,6 +809,7 @@ dungeon.post("/api/teams/:id/confirm", async (c) => {
     .bind(new Date().toISOString(), teamId)
     .run();
 
+  logAuditFromUser(c, "team", "send_confirmation", { entity_type: "team", entity_id: teamId, details: `team: ${team.team_name}` });
   return c.json({ ok: true });
 });
 
@@ -817,6 +842,7 @@ dungeon.put("/api/quizzes/:id/results", async (c) => {
   );
   await c.env.DB.batch(stmts);
 
+  logAuditFromUser(c, "quiz", "set_results", { entity_type: "quiz", entity_id: quizId, details: `${body.teams!.length} teams` });
   return c.json({ success: true });
 });
 
@@ -828,6 +854,7 @@ dungeon.delete("/api/teams/:id", async (c) => {
     .bind(teamId)
     .run();
   if (!meta.changes) return c.json({ error: "team not found" }, 404);
+  logAuditFromUser(c, "team", "delete", { entity_type: "team", entity_id: teamId });
   return c.json({ ok: true });
 });
 
@@ -883,6 +910,7 @@ dungeon.put("/api/users/:id/role", async (c) => {
     .bind(body.role, id)
     .run();
   if (!meta.changes) return c.json({ error: "user not found" }, 404);
+  logAuditFromUser(c, "user", "change_role", { entity_type: "user", entity_id: id, details: `role: ${body.role}` });
   return c.json({ ok: true });
 });
 
@@ -901,6 +929,7 @@ dungeon.delete("/api/users/:id", async (c) => {
     .bind(id)
     .run();
   if (!meta.changes) return c.json({ error: "user not found" }, 404);
+  logAuditFromUser(c, "user", "delete", { entity_type: "user", entity_id: id });
   return c.json({ ok: true });
 });
 
@@ -974,6 +1003,7 @@ dungeon.post("/api/users", async (c) => {
   const row = await c.env.DB.prepare("SELECT id, username, email, role, staff_type, created_at FROM admins WHERE id = ?")
     .bind(result.meta.last_row_id)
     .first();
+  logAuditFromUser(c, "user", "create", { entity_type: "user", entity_id: result.meta.last_row_id as number, details: `${username} (${role})` });
   return c.json(row, 201);
 });
 
@@ -985,6 +1015,7 @@ dungeon.post("/api/users/:id/force-logout", async (c) => {
     "UPDATE admins SET session_version = session_version + 1 WHERE id = ?"
   ).bind(id).run();
   if (!meta.changes) return c.json({ error: "user not found" }, 404);
+  logAuditFromUser(c, "user", "force_logout", { entity_type: "user", entity_id: id });
   return c.json({ ok: true });
 });
 
@@ -1025,6 +1056,7 @@ dungeon.post("/api/users/:id/reinvite", async (c) => {
     setupUrl,
   }));
 
+  logAuditFromUser(c, "user", "reinvite", { entity_type: "user", entity_id: id, details: user.username });
   return c.json({ ok: true });
 });
 
@@ -1055,7 +1087,7 @@ dungeon.get("/api/settings", async (c) => {
   return c.json(settings);
 });
 
-const ALLOWED_SETTINGS_KEYS = ["hourly_wage"];
+const ALLOWED_SETTINGS_KEYS = ["hourly_wage", "ai_event_prompt"];
 
 dungeon.put("/api/settings/:key", async (c) => {
   const denied = requireRole(c, "admin");
@@ -1071,6 +1103,7 @@ dungeon.put("/api/settings/:key", async (c) => {
   await c.env.DB.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
   ).bind(key, String(body.value)).run();
+  logAuditFromUser(c, "settings", "update", { entity_type: "setting", details: `${key} = ${String(body.value).slice(0, 100)}` });
   return c.json({ ok: true });
 });
 
@@ -1740,6 +1773,8 @@ dungeon.post("/api/events", async (c) => {
   ).bind(date, dateTo, time, title.trim(), description.trim(), coverR2Key, coverThumbR2Key, coverWidth, coverHeight, entryFee, hasCompetitions, hasSpecialDrinks, hasCostumeReward, hasTasting, linkedQuizId).run();
 
   const row = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(result.meta.last_row_id).first();
+  logAuditFromUser(c, "event", "create", { entity_type: "event", entity_id: result.meta.last_row_id as number, details: `${title.trim()} (${date})` });
+  try { c.executionCtx.waitUntil(translateEvent(c.env, result.meta.last_row_id as number, title.trim(), description.trim())); } catch {}
   return c.json(row, 201);
 });
 
@@ -1827,6 +1862,8 @@ dungeon.put("/api/events/:id", async (c) => {
   ).bind(date, dateTo, time, title.trim(), description.trim(), coverR2Key, coverThumbR2Key, coverWidth, coverHeight, entryFee, hasCompetitions, hasSpecialDrinks, hasCostumeReward, hasTasting, linkedQuizId, id).run();
 
   const row = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
+  logAuditFromUser(c, "event", "update", { entity_type: "event", entity_id: id, details: `${title.trim()} (${date})` });
+  try { c.executionCtx.waitUntil(translateEvent(c.env, id, title.trim(), description.trim())); } catch {}
   return c.json(row);
 });
 
@@ -1844,7 +1881,116 @@ dungeon.delete("/api/events/:id", async (c) => {
   if (deletes.length) await Promise.all(deletes);
 
   await c.env.DB.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
+  logAuditFromUser(c, "event", "delete", { entity_type: "event", entity_id: id });
   return c.json({ ok: true });
+});
+
+// ── AI popis akce ──
+
+// ── Auto-translate event via AI ──
+
+const TRANSLATE_EVENT_PROMPT = `You are a translator for SPiRiT – Bar, Hookah Lounge & Coffee in Teplice, Czech Republic.
+
+You will receive a Czech event title and description. Translate both into 4 language variants:
+- **en**: Natural English
+- **de**: Natural German
+- **pl**: Natural Polish
+- **sigma**: English "brainrot" / Gen-Z internet slang style — use terms like "sigma", "rizz", "no cap", "fr fr", "bussin", "gyatt", "skibidi", "NPC", "main character", "W", "L", "lock in", "aura", "delulu", "ate and left no crumbs", "hits different" etc. Be creative and funny but keep the actual event info accurate.
+
+Keep the same tone and length as the original. Use Markdown formatting (**bold**, - lists) if the original uses it. Do NOT translate brand names, proper nouns, or "SPiRiT".
+
+Respond ONLY with valid JSON (no markdown code fences):
+{"title_en":"...","title_de":"...","title_pl":"...","title_sigma":"...","description_en":"...","description_de":"...","description_pl":"...","description_sigma":"..."}`;
+
+async function translateEvent(env: Bindings, eventId: number, title: string, description: string) {
+  const apiKey = env.ANTHROPIC_API_KEY;
+  if (!apiKey) return;
+
+  try {
+    const userMsg = `Title: ${title}\n\nDescription:\n${description || "(no description)"}`;
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1500,
+        system: TRANSLATE_EVENT_PROMPT,
+        messages: [{ role: "user", content: userMsg }],
+      }),
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json<{ content: { type: string; text: string }[] }>();
+    const text = data.content?.[0]?.text ?? "";
+    const json = JSON.parse(text);
+
+    await env.DB.prepare(
+      `UPDATE events SET title_en=?, title_de=?, title_pl=?, title_sigma=?,
+       description_en=?, description_de=?, description_pl=?, description_sigma=? WHERE id=?`
+    ).bind(
+      json.title_en || null, json.title_de || null, json.title_pl || null, json.title_sigma || null,
+      json.description_en || null, json.description_de || null, json.description_pl || null, json.description_sigma || null,
+      eventId
+    ).run();
+  } catch (err) {
+    console.error("Event translation failed:", err);
+  }
+}
+
+const DEFAULT_AI_EVENT_PROMPT = `Jsi copywriter pro SPiRiT – Bar, Hookah Lounge & Coffee v Teplicích. Píšeš krátké, výstižné popisky akcí pro web.
+
+Styl:
+- Neformální, přátelský, ale ne přehnaně
+- Směřuj k akci, žádné zbytečné fráze
+- Piš česky, přirozeně, bez klišé
+- Používej Markdown: **bold** pro důležité věci, - pro seznamy
+- Popis by měl mít 2–4 věty nebo krátké odstavce
+- Nepoužívej emoji
+- Nepiš nadpis/název akce – ten už existuje zvlášť
+- Cílovka: mladí lidé 18–35 co rádi zajdou na drink`;
+
+dungeon.post("/api/ai/event-description", async (c) => {
+  const apiKey = c.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return c.json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+
+  const { keywords, title, date } = await c.req.json<{ keywords?: string; title?: string; date?: string }>();
+  if (!keywords?.trim()) return c.json({ error: "keywords are required" }, 400);
+
+  const row = await c.env.DB.prepare("SELECT value FROM settings WHERE key = 'ai_event_prompt'").first<{ value: string }>();
+  const systemPrompt = row?.value?.trim() || DEFAULT_AI_EVENT_PROMPT;
+
+  const userMsg = `Napiš popis akce pro web.${title ? `\nNázev akce: ${title}` : ""}${date ? `\nDatum: ${date}` : ""}\nKlíčová slova / zadání: ${keywords.trim()}`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 400,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMsg }],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    return c.json({ error: `Claude API error ${res.status}: ${body}` }, 502);
+  }
+
+  const data = await res.json<{ content: { type: string; text: string }[] }>();
+  const text = data.content?.[0]?.text ?? "";
+  logAuditFromUser(c, "ai", "generate_description", { details: keywords.trim().slice(0, 100) });
+  return c.json({ description: text.trim() });
 });
 
 // ── Oběžníky (newsletter preview) ──
@@ -2052,6 +2198,42 @@ const setupPasswordHtml = `<!DOCTYPE html>
 
 dungeon.get("/setup-password", (c) => {
   return c.html(setupPasswordHtml);
+});
+
+// ── Audit log API ──
+
+dungeon.get("/api/audit-log", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+
+  const category = c.req.query("category") || null;
+  const userId = c.req.query("user_id") ? Number(c.req.query("user_id")) : null;
+  const limit = Math.min(Number(c.req.query("limit") || 50), 200);
+  const offset = Number(c.req.query("offset") || 0);
+
+  let where = "1=1";
+  const params: any[] = [];
+  if (category) { where += " AND category = ?"; params.push(category); }
+  if (userId) { where += " AND user_id = ?"; params.push(userId); }
+
+  const countRow = await c.env.DB.prepare(`SELECT COUNT(*) as total FROM audit_log WHERE ${where}`)
+    .bind(...params).first<{ total: number }>();
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM audit_log WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all();
+
+  return c.json({ items: results, total: countRow?.total ?? 0 });
+});
+
+dungeon.get("/api/audit-log/users", async (c) => {
+  const denied = requireRole(c, "admin");
+  if (denied) return denied;
+
+  const { results } = await c.env.DB.prepare(
+    "SELECT DISTINCT user_id, username FROM audit_log WHERE user_id IS NOT NULL ORDER BY username"
+  ).all();
+  return c.json(results);
 });
 
 // ── SPA catch-all: serve inline HTML ──
