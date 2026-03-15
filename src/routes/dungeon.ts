@@ -150,10 +150,11 @@ dungeon.post("/api/login", async (c) => {
     return c.json({ error: "username and password are required" }, 400);
   }
 
+  const login = body.username.trim().toLowerCase();
   const row = await c.env.DB.prepare(
-    "SELECT id, username, password_hash, role, session_version FROM admins WHERE username = ?"
+    "SELECT id, username, password_hash, role, session_version FROM admins WHERE LOWER(username) = ? OR LOWER(email) = ?"
   )
-    .bind(body.username.trim().toLowerCase())
+    .bind(login, login)
     .first<{ id: number; username: string; password_hash: string; role: string; session_version: number }>();
 
   if (!row || !(await verifyPassword(body.password, row.password_hash))) {

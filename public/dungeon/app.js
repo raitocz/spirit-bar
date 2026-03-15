@@ -308,7 +308,7 @@
           <div class="login-title">Dungeon Admin</div>
           <form id="login-form">
             <div class="form-group">
-              <label for="username">Username</label>
+              <label for="username">Username nebo email</label>
               <input type="text" id="username" name="username" autocomplete="username" required>
             </div>
             <div class="form-group">
