@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.10.0 (2026-03-15)
+- Přihlášení do administrace pomocí uživatelského jména nebo emailu (case-insensitive)
+
 ## 1.9.0 (2026-03-13)
 - Audit log systém – logování ~20 admin akcí s filtrováním a stránkováním
 - AI generátor popisů akcí (tlačítko „AI ✨" ve formuláři) s konfigurovatelným system promptem v Nastavení
